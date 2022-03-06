@@ -55,9 +55,9 @@ int getTokens(std::vector<std::unique_ptr<Token>>& Tokens, std::string fileName)
 
 	while(std::getline(programm, line))
 	{
-		for (int i = 0; i < line.size(); )
+		for (size_t i = 0; i < line.size(); )
 		{
-			for (int k = i + 1; k <= line.size(); k++)
+			for (size_t k = i + 1; k <= line.size(); k++)
 			{
 				if (!findFirst)
 				{
