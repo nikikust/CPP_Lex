@@ -45,7 +45,7 @@ int getTokens(std::vector<std::unique_ptr<Token>>& Tokens, std::string fileName)
 	{
 		std::cout << "\nUnable to open file.";
 		Tokens.clear();
-		return 1;
+		return 0;
 	}
 
 	std::string line;
@@ -70,7 +70,7 @@ int getTokens(std::vector<std::unique_ptr<Token>>& Tokens, std::string fileName)
 					{
 						programm.close();
 						Tokens.clear();
-						return 2;
+						return 0;
 					}
 					else
 					{
@@ -121,5 +121,5 @@ int getTokens(std::vector<std::unique_ptr<Token>>& Tokens, std::string fileName)
 	}
 
 	programm.close();
-	return 0;
+	return 1;
 }
