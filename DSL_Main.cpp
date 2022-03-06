@@ -17,8 +17,8 @@ int main(void)
 	}
 
 	std::cout << "\nTokens list (" << Tokens.size() << "):\n";
-	for (auto token : Tokens)
-		std::cout << "< " << token.type << " >\t< " << token.value << " >\n";
+	for (auto& token : Tokens)
+		std::cout << "< " << token->type << " >\t< " << token->value << " >\n";
 
 	if (!buildTree(Tokens, Tree))
 	{

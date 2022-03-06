@@ -9,10 +9,8 @@
 #include "DSL_Lexer.h"
 
 
-std::vector<std::unique_ptr<Token>> getTokens(std::string fileName) 
+int getTokens(std::vector<std::unique_ptr<Token>>& Tokens, std::string fileName)
 {
-	std::vector<std::unique_ptr<Token>> Tokens;
-
 	std::regex NAME("[A-Za-z_][A-Za-z0-9_]*");
 	std::regex NUMBER("0|([1-9][0-9]*)");
 	std::regex STRING("\"((\\\\.)|[^\"\\\\])*\"");
@@ -47,7 +45,7 @@ std::vector<std::unique_ptr<Token>> getTokens(std::string fileName)
 	{
 		std::cout << "\nUnable to open file.";
 		Tokens.clear();
-		return Tokens;
+		return 1;
 	}
 
 	std::string line;
@@ -72,7 +70,7 @@ std::vector<std::unique_ptr<Token>> getTokens(std::string fileName)
 					{
 						programm.close();
 						Tokens.clear();
-						return Tokens;
+						return 2;
 					}
 					else
 					{
@@ -123,5 +121,5 @@ std::vector<std::unique_ptr<Token>> getTokens(std::string fileName)
 	}
 
 	programm.close();
-	return Tokens;
+	return 0;
 }

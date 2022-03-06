@@ -13,4 +13,4 @@ struct TokenNode
 	TokenNode() : Node(Token("##PARSER", "Programm")) {}
 };
 
-int buildTree(std::vector<Token> Tokens, TokenNode& tree);
+int buildTree(std::vector<std::unique_ptr<Token>>& Tokens, TokenNode& tree);
