@@ -11,17 +11,17 @@
 
 int getTokens(std::vector<std::unique_ptr<Token>>& Tokens, std::string fileName)
 {
-	std::regex NAME("[A-Za-z_][A-Za-z0-9_]*");
-	std::regex NUMBER("0|([1-9][0-9]*)");
-	std::regex STRING("\"((\\\\.)|[^\"\\\\])*\"");
-	std::regex CHAR("\\'[\\s\\d\\w]\\'"); // ?
+	std::regex NAME("[A-Za-z_][A-Za-z0-9_]*", std::regex::optimize);
+	std::regex NUMBER("0|([1-9][0-9]*)", std::regex::optimize);
+	std::regex STRING("\"((\\\\.)|[^\"\\\\])*\"", std::regex::optimize);
+	std::regex CHAR("\\'[\\s\\d\\w]\\'", std::regex::optimize); // ?
 
-	std::regex OP_UNAR("(\\+\\+)|(\\-\\-)");
-	std::regex OP_BINAR("[=\\-+*\\/\\^]|(\\*\\*)|([!<>=]=)|(<<)|(>>)|[<>]");
-	std::regex OP_FAST("[\\-+*\\/\\^]=");
+	std::regex OP_UNAR("(\\+\\+)|(\\-\\-)", std::regex::optimize);
+	std::regex OP_BINAR("[=\\-+*\\/\\^]|(\\*\\*)|([!<>=]=)|(<<)|(>>)|[<>]", std::regex::optimize);
+	std::regex OP_FAST("[\\-+*\\/\\^]=", std::regex::optimize);
 
-	std::regex BRAKET("[\\[\\]\\{\\}\\(\\)]");
-	std::regex SPLITTER("[,;]");
+	std::regex BRAKET("[\\[\\]\\{\\}\\(\\)]", std::regex::optimize);
+	std::regex SPLITTER("[,;]", std::regex::optimize);
 
 	//std::cmatch matches;
 
@@ -102,13 +102,13 @@ int getTokens(std::vector<std::unique_ptr<Token>>& Tokens, std::string fileName)
 					
 					if (noCandidate)
 					{
-						Tokens.push_back(std::move(std::make_unique<Token>(candidate, std::move(line.substr(i, k - i - 1)))));
+						Tokens.emplace_back(std::move(std::make_unique<Token>(candidate, std::move(line.substr(i, k - i - 1)))));
 						i = k - 1;
 						break;
 					} 
 					else if(k == line.length())
 					{
-						Tokens.push_back(std::move(std::make_unique<Token>(candidate, std::move(line.substr(i, k - i)))));
+						Tokens.emplace_back(std::move(std::make_unique<Token>(candidate, std::move(line.substr(i, k - i)))));
 						i = k;
 						break;
 					}
