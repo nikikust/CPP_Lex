@@ -16,9 +16,7 @@ enum class TokensEnum
 	OP_ASSIGN,
 	OP_UNAR,
 	OP_BINAR,
-	STRING,
-	KEYWORD,
-	TYPE
+	STRING
 };
 
 struct Token {
