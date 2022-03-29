@@ -1,4 +1,3 @@
-
 #include <boost/regex.hpp>
 #include <iostream>
 #include <fstream>
@@ -20,8 +19,6 @@ boost::regex REGEX_3000(
 (\"(?:\\\\.|[^\"\\\\])*\")|\
 ([^\\s]+)"
 );
-std::string Keywords("|print|input|for|while|do|if|else|elif|continue|break|");
-std::string Types("|void|int|float|double|long|string|");
 
 int getTokens(std::vector<std::shared_ptr<Token>>& Tokens, std::string fileName)
 {
@@ -32,7 +29,6 @@ int getTokens(std::vector<std::shared_ptr<Token>>& Tokens, std::string fileName)
 
 	for (boost::sregex_iterator it = boost::sregex_iterator(data.begin(), data.end(), REGEX_3000); it != boost::sregex_iterator(); it++) {
 		boost::smatch match = *it;
-
 		if (!match.str(match.size() - 1).empty())
 		{
 			std::ifstream prog_wrong_line(fileName);
@@ -42,7 +38,7 @@ int getTokens(std::vector<std::shared_ptr<Token>>& Tokens, std::string fileName)
 			{
 				std::getline(prog_wrong_line, buf);
 				pos += buf.size() + 1;
-				line++;
+				++line;
 			}
 			prog_wrong_line.close();
 
@@ -55,12 +51,7 @@ int getTokens(std::vector<std::shared_ptr<Token>>& Tokens, std::string fileName)
 		{
 			if (!match.str(i).empty())
 			{
-				if (static_cast<TokensEnum>(i) == TokensEnum::NAME && Keywords.find("|" + match.str(i) + "|") != std::string::npos)
-					Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::KEYWORD, match.str(i))));
-				else if (static_cast<TokensEnum>(i) == TokensEnum::NAME && Types.find("|" + match.str(i) + "|") != std::string::npos)
-					Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::TYPE, match.str(i))));
-				else
-					Tokens.push_back(std::move(std::make_shared<Token>(static_cast<TokensEnum>(i), match.str(i))));
+				Tokens.push_back(std::move(std::make_shared<Token>(static_cast<TokensEnum>(i), match.str(i))));
 				break;
 			}
 		}
@@ -72,47 +63,17 @@ std::string getName(TokensEnum token)
 {
 	switch (token)
 	{
-	case TokensEnum::BRACKET:
-		return "BRACKET";
-		break;
-	case TokensEnum::NAME:
-		return "NAME";
-		break;
-	case TokensEnum::KEYWORD:
-		return "KEYWORD";
-		break;
-	case TokensEnum::TYPE:
-		return "TYPE";
-		break;
-	case TokensEnum::NUMBER_WITH_LIT:
-		return "NUM_W_LIT";
-		break;
-	case TokensEnum::NUMBER:
-		return "NUMBER";
-		break;
-	case TokensEnum::NUMBER_F:
-		return "NUMBER_F";
-		break;
-	case TokensEnum::OP_EQUAL:
-		return "OP_EQUAL";
-		break;
-	case TokensEnum::OP_ASSIGN:
-		return "OP_ASSIGN";
-		break;
-	case TokensEnum::OP_BINAR:
-		return "OP_BINAR";
-		break;
-	case TokensEnum::OP_UNAR:
-		return "OP_UNAR";
-		break;
-	case TokensEnum::SPLITTER:
-		return "SPLITTER";
-		break;
-	case TokensEnum::STRING:
-		return "STRING";
-		break;
-	default:
-		return "UNKNOWN";
-		break;
+	case TokensEnum::BRACKET:			return "BRACKET";
+	case TokensEnum::NAME:				return "NAME";
+	case TokensEnum::NUMBER_WITH_LIT:	return "NUM_W_LIT";
+	case TokensEnum::NUMBER:			return "NUMBER";
+	case TokensEnum::NUMBER_F:			return "NUMBER_F";
+	case TokensEnum::OP_EQUAL:			return "OP_EQUAL";
+	case TokensEnum::OP_ASSIGN:			return "OP_ASSIGN";
+	case TokensEnum::OP_BINAR:			return "OP_BINAR";
+	case TokensEnum::OP_UNAR:			return "OP_UNAR";
+	case TokensEnum::SPLITTER:			return "SPLITTER";
+	case TokensEnum::STRING:			return "STRING";
+	default:							return "UNKNOWN";
 	}
 }
