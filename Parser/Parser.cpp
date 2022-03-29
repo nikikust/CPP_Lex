@@ -8,11 +8,11 @@ std::vector<std::shared_ptr<Token>> ::iterator Parser::getLastToken()
 	return TokenIterator;
 }
 
-std::vector<std::shared_ptr<Token>> ::iterator Parser::storeIter()
+inline std::vector<std::shared_ptr<Token>> ::iterator Parser::storeIter()
 {
 	return TokenIterator;
 }
-void Parser::restoreIter(std::vector<std::shared_ptr<Token>> ::iterator iter)
+inline void Parser::restoreIter(std::vector<std::shared_ptr<Token>> ::iterator iter)
 {
 	TokenIterator = iter;
 }
@@ -167,7 +167,6 @@ int Parser::arifmetic_op()
 		else
 		{
 			restoreIter(store);
-			std::cout << "!-" << (*TokenIterator)->value;
 			break;
 		}
 	}
@@ -226,7 +225,6 @@ int Parser::EQUAL_OP()
 }
 int Parser::UNAR_OP()
 {
-	std::cout << "\n" << (*TokenIterator)->value;
 	return checkToken((*TokenIterator)->type == TokensEnum::OP_UNAR, "UNAR_OP");
 }
 int Parser::UNAR_BINAR_OP()
@@ -238,23 +236,23 @@ int Parser::UNAR_BINAR_OP()
 
 int Parser::IF()
 {
-	return checkToken((*TokenIterator)->type == TokensEnum::KEYWORD &&
+	return checkToken((*TokenIterator)->type == TokensEnum::NAME &&
 					  (*TokenIterator)->value == "if", "IF");
 }
 int Parser::ELIF()
 {
-	return checkToken((*TokenIterator)->type == TokensEnum::KEYWORD &&
+	return checkToken((*TokenIterator)->type == TokensEnum::NAME &&
 					  (*TokenIterator)->value == "elif", "ELIF");
 }
 int Parser::ELSE()
 {
-	return checkToken((*TokenIterator)->type == TokensEnum::KEYWORD &&
+	return checkToken((*TokenIterator)->type == TokensEnum::NAME &&
 					  (*TokenIterator)->value == "else", "ELSE");
 }
 
 int Parser::WHILE()
 {
-	return checkToken((*TokenIterator)->type == TokensEnum::KEYWORD &&
+	return checkToken((*TokenIterator)->type == TokensEnum::NAME &&
 					  (*TokenIterator)->value == "while", "WHILE");
 }
 
