@@ -6,17 +6,18 @@
 
 enum class TokensEnum
 {
-	BRACKET = 1,
+	PUNCTUATOR = 1,
 	NUMBER_WITH_LIT,
 	NUMBER_F,
 	NUMBER,
 	NAME,
-	SPLITTER,
 	OP_EQUAL,
 	OP_ASSIGN,
 	OP_UNAR,
 	OP_BINAR,
-	STRING
+	STRING,
+	NEWLINE,
+	KEYWORD
 };
 
 struct Token {
