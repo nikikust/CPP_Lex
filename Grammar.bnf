@@ -1,0 +1,88 @@
+lang	:-	statement*;
+
+statement	:-	block
+			|	declaration
+			|	cycle_statement
+			|	selection_statement
+			|	jump_statements
+			|	arifmetic_expression_list
+			|	SEMICOLON
+			;
+
+block 	:-	L_FIG statement* R_FIG
+		;
+ 
+declaration	:-	variable_declaration
+			|	function_declaration
+			;
+
+variable_declaration	:-	declarator (ASSIGN_OP arifmetic_expression)? extended_declaration*
+						;
+
+function_declaration	:-	DEF IDENTIFIER L_RND declaration_list? R_RND block
+						;
+
+declaration_list	:-	declarator (COMMA declarator)*
+					;
+
+declarator	:-	TYPE_SPECIFIER IDENTIFIER
+			;
+
+extended_declaration	:-	COMMA IDENTIFIER (ASSIGN_OP arifmetic_expression)?
+						;
+
+cycle_statement	:-	FOR for_condition_expr block
+				|	WHILE condition_expr block
+				|	DO block WHILE condition_expr
+				;
+
+for_condition_expr	:-	L_RND variable_declaration? SEMICOLON condition? SEMICOLON arifmetic_expression_list? R_RND
+					;
+
+selection_statement	:-	IF condition_expr block (ELIF condition_expr block)* (ELSE block)?
+					;
+
+jump_statements	:-	RETURN
+				|	BREAK
+				|	CONTINUE
+				;
+
+condition_expr	:-	L_RND condition R_RND
+				;
+
+condition	:-	arifmetic_expression
+			;
+
+arifmetic_expression_list	:-	arifmetic_expression (COMMA arifmetic_expression)*
+							;
+
+arifmetic_expression	:-	unary_expression (BINAR_OP arifmetic_expression)*
+						;
+
+unary_expression	:-	UNAR_OP_PREF unary_expression
+					|	UNAR_BINAR_OP unary_expression
+					|	postfix_expression postfix_operations*
+					;
+
+postfix_expression	:-	literal
+					|	L_RND arifmetic_expression R_RND
+					;
+
+postfix_operations	:-	L_RND arifmetic_expression_list? R_RND
+					|	L_SQR arifmetic_expression R_SQR
+					|	UNAR_OP_POST
+					;
+
+literal	:-	IDENTIFIER
+		|	STRING
+		|	NUMBER
+		;
+
+
+
+
+
+
+
+
+
