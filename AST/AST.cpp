@@ -2,52 +2,136 @@
 
 #include "AST.h"
 
+//#define _DEBUG
+
 
 AST::AST()
 {
 	root = std::make_shared<Node>(Node(Token(), TokenType::SPECIAL, nullptr));
 	local_root = root;
 	cursor = root;
+	root->nextNamespace();
 }
 
-void AST::nextStatement()
+void AST::ret()
 {
-	local_roots.clear();
-	local_root = root;
-	cursor = root;
-}
+	cursor = local_root;
+#ifdef _DEBUG
+	std::cout << "ret, changed to " << local_root->getValue() << "\n";
 
+	this->printTree();
+	std::cout << "\n---------------------------------------------------------\n";
+#endif
+}
 void AST::goDown()
 {
-	auto newProbe = std::make_shared<Node>(Node(Token("goDownProbe"), TokenType::PROBE, cursor));
-	cursor = cursor->addChild(newProbe);
-
 	local_roots.push_back(local_root);
-	local_root = cursor->getParent();
+	local_root = cursor;
+
+#ifdef _DEBUG
+	std::cout << "goDown, changed to " << local_root->getValue() << "\n";
+#endif
+}
+void AST::addProbe()
+{
+	auto newProbe = std::make_shared<Node>(Token("Probe"), TokenType::PROBE, cursor);
+	cursor = cursor->addChild(newProbe);
+}
+void AST::addNode()
+{
+	 auto node = std::make_shared<Node>(Token(), TokenType::SPECIAL, cursor);
+	 cursor = cursor->addChild(node);
 }
 bool AST::goUp()
 {
 	if (!local_roots.empty()) // && local_root != cursor->getParent() ???
 	{
-		cursor = local_root;
-		local_root = local_roots.back();
-		local_roots.pop_back();
+		if (local_root->getType() == TokenType::OPERATION || local_root->getType() == TokenType::PROBE)
+		{
+			cursor = local_root;
+			local_root = local_roots.back();
+			local_roots.pop_back();
+		}
+		else
+		{
+			local_root = local_roots.back();
+			local_roots.pop_back();
+			cursor = local_root;
+		}
+
+#ifdef _DEBUG
+		std::cout << "goUp, changed to " << local_root->getValue() << "\n";
+
+		this->printTree();
+		std::cout << "\n---------------------------------------------------------\n";
+#endif
 		return 1;
 	}
 	return 0;
 }
+void AST::checkForFull(std::shared_ptr<Token> next)
+{
+#ifdef _DEBUG
+	std::cout << "Check for full of " << cursor->getValue() << " : Next token is " << next->value << "\n";
+#endif
+	while (cursor->isFull() && 
+			(((cursor->getValue() == "if" || cursor->getValue() == "elif") && (cursor->getChilds().size() >= 3 || next->value != "elif" && next->value != "else")) ||
+			(cursor->getValue() == "while" || cursor->getValue() == "for" || cursor->getValue() == "else" ||
+			 cursor->getValue() == "print" || cursor->getValue() == "input" ||
+			 cursor->getValue() == "break" || cursor->getValue() == "continue")))
+	{
+#ifdef _DEBUG
+		std::cout << "Node " << cursor->getValue() << " is Full!!! Next token is " << next->value << "\n";
+#endif
+		goUp();
+	}
+}
 
 bool AST::addToken(Token& token, TokenType type)
 {
-	auto newNode = std::make_shared<Node>(Node(token, type, cursor));
-	//std::cout << "\n" << token.str() << "\n";
+	auto newNode = std::make_shared<Node>(token, type, cursor);
 
+	if (type == TokenType::_EOF)
+	{
+		root->addChild(newNode);
+		return 1;
+	}
+
+#ifdef _DEBUG
+	std::cout << token.str() << " | " << getName(type) << " | Current: " << getName(cursor->getType()) << "\n";
+	std::cout << "Root vect:";
+	for (std::shared_ptr<Node> node : local_roots)
+		std::cout << " " << node->getValue();
+	std::cout << "\n";
+#endif
+	
 	switch (cursor->getType())
 	{
 	case TokenType::OPERATION:
 		if (type == TokenType::OPERATION)
 		{
-			if (newNode->getRang() >= cursor->getRang())
+			if (cursor->getValue() == "." && token.value == "(")
+			{
+				std::cout << "\nExpected name instead of rounds!!!";
+				return 0;
+			}
+			if (newNode->getRang() == 2 || newNode->getRang() == 3)
+			{
+				newNode->setParent(cursor);
+				if (cursor->getChilds().empty())
+					cursor = cursor->addChild(newNode);
+				else
+				{
+					newNode->addChild(cursor->getLastChild());
+					cursor = cursor->replaceLastChild(newNode);
+				}
+			}
+			else if (token.value == "(")
+			{
+				goDown();
+				addProbe();
+			} 
+			else if (newNode->getRang() >= cursor->getRang())
 			{
 				while (cursor->getParent() != local_root && newNode->getRang() >= cursor->getParent()->getRang())
 					cursor = cursor->getParent();
@@ -65,40 +149,24 @@ bool AST::addToken(Token& token, TokenType type)
 			else
 				cursor = cursor->addChild(newNode);
 		}
-		else if (type == TokenType::ROUNDS)
+		else if ((type == TokenType::IDENTIFIER || type == TokenType::CONSTANT))
 		{
-			if (cursor->getValue() == ".")
-			{
-				while (cursor->getParent()->getValue() == ".")
-					cursor = cursor->getParent();
-				newNode->addChild(cursor);
-				newNode->setParent(cursor->getParent());
-				cursor = cursor->getParent()->replaceLastChild(newNode);
-			}
-			goDown();
-		}
-		else
+			while (cursor->isFull())
+				cursor = cursor->getLastChild();
 			cursor = cursor->addChild(newNode);
+		}
 		break;
 	case TokenType::IDENTIFIER:
 		if (type == TokenType::OPERATION)
 		{
 			while (cursor->getParent() != local_root && newNode->getRang() >= cursor->getParent()->getRang())
 				cursor = cursor->getParent();
-
-			newNode->setParent(cursor->getParent());
-			newNode->addChild(cursor);
-			cursor = cursor->getParent()->replaceLastChild(newNode);
-		}
-		else if (type == TokenType::ROUNDS || type == TokenType::SQUARES)
-		{
-			while (cursor->getParent()->getValue() == ".")
-				cursor = cursor->getParent();
-
 			newNode->addChild(cursor);
 			newNode->setParent(cursor->getParent());
 			cursor = cursor->getParent()->replaceLastChild(newNode);
-			goDown();
+
+			if (token.value == "(" || token.value == "[")
+				goDown();
 		}
 		else
 		{
@@ -109,6 +177,11 @@ bool AST::addToken(Token& token, TokenType type)
 	case TokenType::CONSTANT:
 		if (type == TokenType::OPERATION)
 		{
+			if (cursor->getValue() == "." || cursor->getValue() == "(" || (token.type != TokensEnum::STRING && cursor->getValue() == "["))
+			{
+				std::cout << "\nExpected name instead of: " << cursor->getToken().str();
+				return 0;
+			}
 			while (cursor->getParent() != local_root && newNode->getRang() >= cursor->getParent()->getRang())
 				cursor = cursor->getParent();
 
@@ -123,14 +196,33 @@ bool AST::addToken(Token& token, TokenType type)
 		}
 		break;
 	case TokenType::SPECIAL:
-		if (type == TokenType::ROUNDS)
+		if (token.value == "(")
 			goDown();
+		else if (type == TokenType::SPECIAL || type == TokenType::TYPE)
+		{
+			cursor = cursor->addChild(newNode);
+			goDown();
+			if (token.value == "break" || token.value == "continue")
+				goUp();
+		}
 		else
 			cursor = cursor->addChild(newNode);
 		break;
+	case TokenType::TYPE:
+		if (type == TokenType::IDENTIFIER)
+			cursor = cursor->addChild(newNode);
+		else
+		{
+			std::cout << "\nExpected identifier instead of: " + token.str();
+			return 0;
+		}
+		break;
 	case TokenType::PROBE:
-		if (newNode->getType() == TokenType::ROUNDS)
+		if (token.value == "(")
+		{
 			goDown();
+			addProbe();
+		}
 		else
 		{
 			if (!cursor->isEmpty())
@@ -139,31 +231,19 @@ bool AST::addToken(Token& token, TokenType type)
 			cursor = cursor->getParent()->replaceLastChild(newNode);
 		}
 		break;
-	case TokenType::ROUNDS:
-	case TokenType::SQUARES:
-		if (cursor != local_root)
-		{
-			newNode->setParent(cursor->getParent());
-			newNode->addChild(cursor);
-			cursor = cursor->getParent()->replaceLastChild(newNode);
-		}
-		else
-			cursor = cursor->addChild(newNode);
-
-		if (type == TokenType::ROUNDS || type == TokenType::SQUARES)
-			goDown();
-		break;
 	}
 
-	//this->printTree();
-	//std::cout << "\n---------------------------------------------------------\n";
+#ifdef _DEBUG
+	this->printTree();
+	std::cout << "\n---------------------------------------------------------\n";
+#endif
 
 	return 1;
 }
 
-void AST::printTree()
+void AST::printTree(bool newView)
 {
-	std::cout << std::endl << root->str(0, root, local_root, cursor);
+	std::cout << "\no\n" << root->str(root, local_root, cursor, newView);
 }
 std::string AST::genRPN_str(bool full)
 {
@@ -171,7 +251,12 @@ std::string AST::genRPN_str(bool full)
 }
 nodeVect AST::RPN()
 {
-	auto rpn = this->root->RPN();
-	rpn.push_back(root);
-	return rpn;
+	auto out = this->root->RPN(root, 0, true);
+	this->rpn_ok = root->getState();
+	return out;
+}
+
+void AST::showVars()
+{
+	root->showVars();
 }

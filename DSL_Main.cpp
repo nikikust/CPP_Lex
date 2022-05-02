@@ -3,12 +3,7 @@
 #include "Lexer/Lexer.h"
 #include "Parser/Parser.h"
 
-#define _DEBUG 1
-
-#if _DEBUG
-#include <chrono>
-#include <windows.h>
-#endif
+#include "profile.h"
 
 
 int main(void)
@@ -16,18 +11,18 @@ int main(void)
 	setlocale(LC_ALL, "Rus");
 	std::vector<std::shared_ptr<Token>> Tokens;
 	
-	auto t0 = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-	if (!getTokens(Tokens, "sample_code.yapl"))
 	{
-		std::cout << "\nLexer error.";
-		return 1;
+		auto a = LogDuration("Lexing time: ");
+		if (!getTokens(Tokens, "sample_code.yapl"))
+		{
+			std::cout << "\x1B[31m!Lexer error!\033[0m\n";
+			return 1;
+		}
 	}
-	auto t1 = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-	std::cout << "Lex TIME: " << (t1 - t0) / 1000.;
 
 	// --- //
-	
-	std::cout << "\nTokens list (" << Tokens.size() << "):\n";
+	/*
+	std::cout << "\nTokens list (amount: " << Tokens.size() << "):\n";
 	for (auto& token : Tokens)
 	{
 		std::cout << "< " << getName(token->type) << " >\t< "
@@ -35,19 +30,28 @@ int main(void)
 						  << token->line << ":" << token->position << std::endl;
 	}
 	std::cout << "\nTotal: " << Tokens.size() << "\n---------------------------------------------------------\n";
+	*/
+	// --- //
 	
-	///
-	
+	//	   __________.
+	//	  /         /|
+	//	 /         / |
+	//	/_________/  |
+	//	|         |  |
+	//	|         |  /
+	//	|         | /
+	//	|_________|/
+	//	
+
 	Parser parser;
-	
-	t0 = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-	int res = parser.lang(Tokens);
-	t1 = std::chrono::high_resolution_clock::now().time_since_epoch().count(); // Average time for Lex+Parse - 131.34mks
+	bool parse_result;
+	bool RPN_result;
+	{
+		auto a = LogDuration("Parsing time: ");
+		parse_result = parser.lang(Tokens);
+	}   // Average time for Lex+Parse - 131.34mks, 190mks
 
-	std::cout << "\nParse result: " << res;
-	std::cout << "\nParse TIME: " << (t1 - t0) / 1000.;
-
-	std::cout << "\n\nTokens list 2 (" << Tokens.size() << "):";
+	std::cout << "\n\nTokens list after parse (amount: " << Tokens.size() << "):";
 	for (auto& token : Tokens)
 	{
 		std::cout << "\n< " << getName(token->type) << " >\t< ";
@@ -55,14 +59,29 @@ int main(void)
 		std::cout << token->gotIn;
 	}
 	
-	std::cout << "\n\n---------------------------------------------------------\nAbstract Syntax Tree:\n|";
-	parser.printTree();
+	std::cout << "\n\nParse result: " << (parse_result ? colorText(32) + "code is correct" : colorText(31) + "mistake found") << colorText();
+	
+	if (parse_result)
+	{
+		std::cout << "\n\n---------------------------------------------------------\nAbstract Syntax Tree:\n";
+		parser.printTree();
 
-	std::cout << "\n---------------------------------------------------------\nReverse Polish Notation:\n\n";
-	parser.formRPN();
-	parser.printRPN();
+		std::cout << "\n---------------------------------------------------------\nReverse Polish Notation:\n\n";
+		RPN_result = parser.formRPN();
+		if (RPN_result)
+		{
+			parser.printRPN();
+			parser.showVars();
+		}
+	}
 
-	std::cout << "\n\nSend any key: ";
-	std::cin >> t0; // Press Any Key :)
+	if (parse_result && RPN_result)
+		std::cout << colorText(32) << "\n\nCode generated successfuly!" << colorText();
+	else
+		std::cout << colorText(31) << "\n\nCode generation is failed!" << colorText();
+
+
+	std::cout << "\n\nSend any key: "; int PressAnyKey;
+	std::cin >> PressAnyKey; // Press Any Key :)
 	return 0; 
 }

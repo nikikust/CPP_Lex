@@ -4,6 +4,10 @@
 #include <memory>
 
 #include "Lexer.h"
+#include "../profile.h"
+
+constexpr bool USE_COLORS = 1;
+
 
 static boost::regex REGEX_3000(
 	"([\\[\\]\\{\\}\\(\\);,])|\
@@ -18,8 +22,8 @@ static boost::regex REGEX_3000(
 ([^\\s]+)"
 );
 
-static std::string Keywords("|print|input|for|while|do|if|else|elif|continue|break|return|def|");
-static std::string SimpleTypes("|int|float|double|long|bool|ptr|");
+static std::string Keywords("|for|while|if|else|elif|continue|break|return|def|void|");
+static std::string SimpleTypes("|int|long|double|bool|ptr|string|");
 
 std::string operator*(std::string a, unsigned int b)
 {
@@ -37,6 +41,7 @@ std::string& operator*=(std::string& a, unsigned int b)
 	return a;
 }
 
+
 int getTokens(tokenVect& Tokens, std::string fileName)
 {
 	size_t curent_line = 1, curent_line_pos = 1;
@@ -46,12 +51,13 @@ int getTokens(tokenVect& Tokens, std::string fileName)
 					  std::istreambuf_iterator<char>());
 	prog.close();
 
+	size_t pos = 0;
 	boost::smatch match;
 	for (boost::sregex_iterator it = boost::sregex_iterator(data.begin(), data.end(), REGEX_3000); it != boost::sregex_iterator(); it++) {
 		match = *it;
 		if (!match.str(match.size() - 1).empty())
 		{
-			std::cout << "\nUnknown lexem at (" << curent_line << ", " << (match.position() - curent_line_pos) << "): '" << match.str() << "'"<< std::endl;
+			std::cout << colorText(31) << "Unknown lexem at (" << curent_line << ", " << ((match.position() ? match.position() : 2) - curent_line_pos) << "): '" << match.str() << "'" << colorText() << std::endl;
 			Tokens.clear();
 			return 0;
 		}
@@ -60,7 +66,7 @@ int getTokens(tokenVect& Tokens, std::string fileName)
 		{
 			if (!match.str(i).empty())
 			{
-				size_t pos = match.position() - curent_line_pos + 1; 
+				pos = (match.position() ? match.position() : 2) - curent_line_pos;
 				TokensEnum type = static_cast<TokensEnum>(i);
 
 				if (type == TokensEnum::NEWLINE)
@@ -76,7 +82,7 @@ int getTokens(tokenVect& Tokens, std::string fileName)
 				}
 				else if (type == TokensEnum::IDENTIFIER)
 				{
-					if(Keywords.find("|" + match.str(i) + "|") != std::string::npos || match.str(i) == "void")
+					if(Keywords.find("|" + match.str(i) + "|") != std::string::npos)
 						Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::KEYWORD, match.str(i), curent_line, pos)));
 					else if (SimpleTypes.find("|" + match.str(i) + "|") != std::string::npos)
 						Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::SIMPLETYPE, match.str(i), curent_line, pos)));
@@ -100,28 +106,22 @@ int getTokens(tokenVect& Tokens, std::string fileName)
 			}
 		}
 	}
-	Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::_EOF, "EOF", curent_line, match.position() - curent_line_pos + 1)));
+	if (pos == 0)
+		std::cout << colorText(30, 43) << "File is empty!\n" << colorText();
+
+	Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::_EOF, "EOF", curent_line, pos)));
 	return 1;
 }
 
-std::string getName(TokensEnum token)
+std::string colorText(int color, int background) // black, red, green, yellow, blue, purple, lightblue, white; 
 {
-	switch (token)
-	{
-	case TokensEnum::PUNCTUATOR:		return "PUNCTUATOR";
-	case TokensEnum::COMMENT:			return " COMMENT  ";
-	case TokensEnum::IDENTIFIER:		return "IDENTIFIER";
-	case TokensEnum::FLOAT:				return "  FLOAT   ";
-	case TokensEnum::INT:				return "   INT    ";
-	case TokensEnum::BOOL:				return "   BOOL   ";
-	case TokensEnum::STRING:			return "  STRING  ";
-	case TokensEnum::OP_BINAR:			return " OP_BINAR ";
-	case TokensEnum::NEWLINE:			return " NEW_LINE ";
-	case TokensEnum::OP_UNAR_PREF:		return " OP_UNAR  ";
-	case TokensEnum::OP_UNAR_POST:		return " OP_UNAR  ";
-	case TokensEnum::KEYWORD:			return " KEYWORD  ";
-	case TokensEnum::SIMPLETYPE:		return " SMP_TYPE ";
-	case TokensEnum::_EOF:				return "   EOF    ";
-	default:							return " UNKNOWN  ";
-	}
+	if (USE_COLORS)
+		return "\x1B[" + std::to_string(color) + ";" + std::to_string(background) + "m";
+	return "";
+}
+std::string colorText()
+{
+	if (USE_COLORS)
+		return "\x1B[0m";
+	return "";
 }

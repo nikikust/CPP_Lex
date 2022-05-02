@@ -5,7 +5,10 @@
 
 #include "../VarTable/VarTable.h"
 #include "../AST/AST.h"
+#include "../RPN/RPN_Element.h"
 
+
+typedef std::vector<std::shared_ptr<RPN_Element>> RPNVect;
 
 class Parser
 {
@@ -18,20 +21,21 @@ class Parser
 
 	VarTable variables;
 	AST tree;
-	nodeVect RPN;
+	RPNVect RPN;
 
 public:
 	Parser();
-	tokenVect ::iterator getLastToken();
-	void printTree();
-	void printRPN(bool full = false);
-	void formRPN();
 
-	bool checkToken(bool x, std::string type);
+	void printTree(bool newView = true);
+	void printRPN(bool full = false);
+	bool formRPN();
+	void showVars();
+
+	bool checkToken(bool x, std::string type, bool moveIter = true);
 	bool breakCode();
 
 	bool TRY(bool x);
-	void USE(bool x);
+	bool USE(bool x);
 
 
 	bool lang(tokenVect& TokenVect);
@@ -52,6 +56,7 @@ public:
 
 	bool selection_statement();
 
+	bool after_keyword();
 	bool jump_statements();
 	bool condition_expr();
 	bool condition();
@@ -68,6 +73,7 @@ public:
 	bool array_declatation_part();
 
 	bool IDENTIFIER();
+	bool CLASS();
 	bool INT();
 	bool FLOAT();
 	bool STRING();
@@ -90,6 +96,8 @@ public:
 	bool RETURN();
 	bool BREAK();
 	bool CONTINUE();
+	bool PRINT();
+	bool INPUT();
 
 	bool TYPE_SPECIFIER();
 	
