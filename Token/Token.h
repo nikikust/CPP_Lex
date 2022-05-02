@@ -16,6 +16,7 @@ enum class TokensEnum	// For LEXER
 	OP_UNAR_POST,
 	KEYWORD,
 	SIMPLETYPE,
+	TEMPLATEDTYPE,
 	_EOF,
 };
 

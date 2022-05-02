@@ -78,7 +78,8 @@ void AST::checkForFull(std::shared_ptr<Token> next)
 			(((cursor->getValue() == "if" || cursor->getValue() == "elif") && (cursor->getChilds().size() >= 3 || next->value != "elif" && next->value != "else")) ||
 			(cursor->getValue() == "while" || cursor->getValue() == "for" || cursor->getValue() == "else" ||
 			 cursor->getValue() == "print" || cursor->getValue() == "input" ||
-			 cursor->getValue() == "break" || cursor->getValue() == "continue")))
+			 cursor->getValue() == "break" || cursor->getValue() == "continue" ||
+			 cursor->getValue() == "class")))
 	{
 #ifdef _DEBUG
 		std::cout << "Node " << cursor->getValue() << " is Full!!! Next token is " << next->value << "\n";
@@ -112,7 +113,7 @@ bool AST::addToken(Token& token, TokenType type)
 		{
 			if (cursor->getValue() == "." && token.value == "(")
 			{
-				std::cout << "\nExpected name instead of rounds!!!";
+				std::cout << "\nTREE: Expected name instead of rounds!!!";
 				return 0;
 			}
 			if (newNode->getRang() == 2 || newNode->getRang() == 3)
@@ -170,7 +171,7 @@ bool AST::addToken(Token& token, TokenType type)
 		}
 		else
 		{
-			std::cout << "\nExpected operation instead of: " + token.str();
+			std::cout << "\nTREE: Expected operation instead of: " + token.str();
 			return 0;
 		}
 		break;
@@ -179,7 +180,7 @@ bool AST::addToken(Token& token, TokenType type)
 		{
 			if (cursor->getValue() == "." || cursor->getValue() == "(" || (token.type != TokensEnum::STRING && cursor->getValue() == "["))
 			{
-				std::cout << "\nExpected name instead of: " << cursor->getToken().str();
+				std::cout << "\nTREE: Expected name instead of: " << cursor->getToken().str();
 				return 0;
 			}
 			while (cursor->getParent() != local_root && newNode->getRang() >= cursor->getParent()->getRang())
@@ -191,7 +192,7 @@ bool AST::addToken(Token& token, TokenType type)
 		}
 		else
 		{
-			std::cout << "\nExpected operation instead of: " + token.str();
+			std::cout << "\nTREE: Expected operation instead of: " + token.str();
 			return 0;
 		}
 		break;
@@ -205,15 +206,26 @@ bool AST::addToken(Token& token, TokenType type)
 			if (token.value == "break" || token.value == "continue")
 				goUp();
 		}
+		else if (cursor->getValue() == "class")
+		{
+			if (type == TokenType::IDENTIFIER)
+				cursor->addChild(newNode);
+			else if (type == TokenType::SPECIAL)
+				cursor = cursor->addChild(newNode);
+		}
 		else
 			cursor = cursor->addChild(newNode);
 		break;
 	case TokenType::TYPE:
 		if (type == TokenType::IDENTIFIER)
 			cursor = cursor->addChild(newNode);
+		else if (type == TokenType::SPECIAL)
+		{
+			addProbe();
+		}
 		else
 		{
-			std::cout << "\nExpected identifier instead of: " + token.str();
+			std::cout << "\nTREE: Expected identifier instead of: " + token.str();
 			return 0;
 		}
 		break;
@@ -229,6 +241,8 @@ bool AST::addToken(Token& token, TokenType type)
 				newNode->addChild(cursor->getLastChild());
 			newNode->setParent(cursor->getParent());
 			cursor = cursor->getParent()->replaceLastChild(newNode);
+			if (type == TokenType::TYPE)
+				goDown();
 		}
 		break;
 	}

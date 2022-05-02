@@ -17,6 +17,7 @@ std::string getName(TokensEnum token)
 	case TokensEnum::OP_UNAR_POST:		return " OP_UNAR  ";
 	case TokensEnum::KEYWORD:			return " KEYWORD  ";
 	case TokensEnum::SIMPLETYPE:		return " SMP_TYPE ";
+	case TokensEnum::TEMPLATEDTYPE:		return "TEMPL_TYPE";
 	case TokensEnum::_EOF:				return "   EOF    ";
 	default:							return " UNKNOWN  ";
 	}

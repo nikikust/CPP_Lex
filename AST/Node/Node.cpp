@@ -148,7 +148,7 @@ bool Node::isFull()
 			return 0;
 		else if (val == "if" || val == "elif")
 			return amount >= 2;
-		else if (val == "while")
+		else if (val == "while" || val == "class")
 			return amount >= 2;
 		else if (val == "for")
 			return amount >= 4;
@@ -496,6 +496,10 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		
 		requestContinue(output.back());
 	}
+	else if (this->getValue() == "class")
+	{
+		
+	}
 	else if (this->getType() == TokenType::PROBE)
 	{
 		if (!this->isEmpty())
@@ -548,7 +552,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	{
 		if (this->getValue() == "{" || this->getValue() == "else")
 			nextNamespace();
-		else if (this->getToken().type == TokensEnum::IDENTIFIER && !varExists(this->getValue()))
+		else if (this->getToken().type == TokensEnum::IDENTIFIER && !varExists(this->getValue()) && this->getParent()->getValue() != "class")
 		{
 			std::cout << colorText(31) << "ERR: unknown variable. " << this->token.str() << colorText() << "\n";
 			breakCode();

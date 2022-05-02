@@ -5,7 +5,6 @@
 #include "../../Token/Token.h"
 
 
-
 class Coin
 {
 public:

@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 
 #include "Parser.h"
 #include "../profile.h"
@@ -58,9 +59,10 @@ bool Parser::checkToken(bool x, std::string type, bool moveIter)
 	}
 	return x;
 }
-bool Parser::breakCode()
+bool Parser::breakCode(std::string message)
 {
-	std::cout << colorText(31, 1) << "--------------------------- Break ---------------------------\nat " << (*TokenIterator)->str() << colorText() << "\n\n";
+	std::cout << colorText(31, 1) << "\n--------------------------- Break ---------------------------\nat " << (*TokenIterator)->str() << colorText() << "\n" << message << "\n\n";
+
 	StateOK = false;
 	return 1;
 }
@@ -83,7 +85,7 @@ bool Parser::lang(tokenVect& TokenVect)
 	TokenIterator = Tokens.begin();
 
 	while (TokenIterator != Tokens.end())
-		if (!TRY(statement()))
+		if (!(TRY(statement()) || TRY(declaration()) || TRY(class_declaration())))
 			return 0;
 	return 1;
 }
@@ -94,7 +96,7 @@ bool Parser::statement()
 	
 	bool x = StateOK && 
 		     ( block() 
-		    || declaration()
+		    || full_variable_declaration()
 		    || cycle_statement()
 		    || selection_statement()
 		    || jump_statements()
@@ -118,11 +120,52 @@ bool Parser::block()
 	
 	return StateOK;
 }
+
 bool Parser::declaration()
 {
-	return StateOK && 
-		  (variable_declaration() || function_declaration());
+	if (TRY(type_specification()))
+		TRY(function_declaration()) || TRY(variable_declaration());
+	else if (TRY(VOID()))
+		USE(function_declaration());
+	else
+		return 0;
+
+	return StateOK;
 }
+bool Parser::class_declaration()
+{
+	if (!TRY(CLASS()))
+		return 0;
+
+	USE(IDENTIFIER());
+	if (StateOK)
+		knownClasses.push_back(last_token.value);
+
+	USE(class_block());
+
+	return StateOK;
+}
+bool Parser::class_block()
+{
+	if (!TRY(BRACKET_L_FIG()))
+		return 0;
+
+	while(TRY(declaration())) {}
+
+	USE(BRACKET_R_FIG());
+
+	return StateOK;
+}
+bool Parser::full_variable_declaration()
+{
+	if (!TRY(type_specification()))
+		return 0;
+
+	TRY(variable_declaration());
+
+	return StateOK;
+}
+
 bool Parser::cycle_statement()
 {
 	if (TRY(FOR()))
@@ -194,9 +237,6 @@ bool Parser::arifmetic_expression_list()
 
 bool Parser::variable_declaration()
 {
-	if (!TRY(declarator()))
-		return 0;
-
 	if (TRY(STRONG_ASSIGN_OP()))
 		USE(arifmetic_expression());
 
@@ -207,21 +247,54 @@ bool Parser::variable_declaration()
 }
 bool Parser::function_declaration()
 {
-	if (!TRY(DEF()))
+	if (!TRY(BRACKET_L_RND()))
 		return 0;
 
-	USE(IDENTIFIER());
-	USE(BRACKET_L_RND());
 	USE(attributes_list());
 	USE(BRACKET_R_RND());
-	USE(block());
+	USE(after_keyword());
 
 	return StateOK;
 }
 
+bool Parser::specificator()	
+{
+	return StateOK &&
+		  (templated_specificator() || simple_specificator());
+}
+bool Parser::templated_specificator()
+{
+	if (!TRY(TEMPLATED_TYPE()))
+		return 0;
+
+	USE(BRACKET_L_TRG());
+	USE(specificator());
+
+	while (TRY(COMMA()))
+		USE(specificator());
+
+	USE(BRACKET_R_TRG());
+
+	return StateOK;
+}
+bool Parser::simple_specificator()
+{
+	return StateOK &&
+		(SIMPLE_TYPE() || CLASS_TYPE());
+}
+bool Parser::type_specification()
+{
+	if (!TRY(specificator()))
+		return 0;
+
+	TRY(array_declatation_part());
+	USE(IDENTIFIER());
+
+	return StateOK;
+}
 bool Parser::declarator()
 {
-	if (!( TRY(TYPE_SPECIFIER()) || TRY(CLASS()) ))
+	if (!( TRY(SIMPLE_TYPE()) || TRY(CLASS()) ))
 		return 0;
 
 	TRY(array_declatation_part());
@@ -242,20 +315,11 @@ bool Parser::extended_declaration()
 }
 bool Parser::attributes_list()
 {
-	if (!TRY(attribute()))
+	if (!TRY(type_specification()))
 		return 0;
 
 	while (TRY(COMMA()))
-		USE(attribute());
-
-	return StateOK;
-}
-bool Parser::attribute()
-{
-	if (!TRY(TYPE_SPECIFIER()))
-		return 0;
-	while (TRY(POINTER())) {}
-	USE(IDENTIFIER());
+		USE(type_specification());
 
 	return StateOK;
 }
@@ -378,20 +442,6 @@ bool Parser::IDENTIFIER()
 	bool x = checkToken((*TokenIterator)->type == TokensEnum::IDENTIFIER, "VAR");
 	if (x)
 		return tree.addToken(last_token, TokenType::IDENTIFIER);
-	return x;
-}
-bool Parser::CLASS()
-{
-	checkToken((*TokenIterator)->type == TokensEnum::IDENTIFIER, "VAR", false);
-	return 0;
-
-
-	bool x = checkToken((*TokenIterator)->type == TokensEnum::IDENTIFIER, "VAR", false);
-	if (x)
-	{
-		tree.addToken(last_token, TokenType::TYPE);
-		return checkToken((*TokenIterator)->type == TokensEnum::IDENTIFIER, "USER_TYPE");
-	}
 	return x;
 }
 bool Parser::STRING()
@@ -518,13 +568,6 @@ bool Parser::DO()
 		return tree.addToken(last_token, TokenType::SPECIAL);
 	return x;
 }
-bool Parser::DEF()
-{
-	bool x = checkToken((*TokenIterator)->value == "def", "DEF");
-	if (x)
-		return tree.addToken(last_token, TokenType::SPECIAL);
-	return x;
-}
 bool Parser::RETURN()
 {
 	bool x = checkToken((*TokenIterator)->value == "return", "RETURN");
@@ -560,12 +603,48 @@ bool Parser::INPUT()
 		return tree.addToken(last_token, TokenType::SPECIAL);
 	return x;
 }
+bool Parser::VOID()
+{
+	bool x = checkToken((*TokenIterator)->value == "void", "VOID");
+	if (x)
+		return tree.addToken(last_token, TokenType::SPECIAL);
+	return x;
+}
+bool Parser::CLASS()
+{
+	bool x = checkToken((*TokenIterator)->value == "class", "CLASS");
+	if (x)
+		return tree.addToken(last_token, TokenType::SPECIAL);
+	return x;
+}
 
-bool Parser::TYPE_SPECIFIER()
+bool Parser::SIMPLE_TYPE()
 {
 	bool x = checkToken((*TokenIterator)->type == TokensEnum::SIMPLETYPE, "SIMPLE_TYPE");
 	if (x)
 		return tree.addToken(last_token, TokenType::TYPE);
+	return x;
+}
+bool Parser::TEMPLATED_TYPE()
+{
+	bool x = checkToken((*TokenIterator)->type == TokensEnum::TEMPLATEDTYPE, "TEMPLATED_TYPE");
+	if (x)
+		return tree.addToken(last_token, TokenType::TYPE);
+	return x;
+}
+bool Parser::CLASS_TYPE()
+{
+	bool x = checkToken((*TokenIterator)->type == TokensEnum::IDENTIFIER, "VAR", false);
+	if (x)
+	{
+		if (std::find(knownClasses.begin(), knownClasses.end(), (*TokenIterator)->value) != knownClasses.end())
+		{
+			checkToken((*TokenIterator)->type == TokensEnum::IDENTIFIER, "USER_TYPE");
+			tree.addToken(last_token, TokenType::TYPE);
+		}
+		else
+			return 0;
+	}
 	return x;
 }
 
@@ -596,6 +675,20 @@ bool Parser::BRACKET_L_RND()
 bool Parser::BRACKET_R_RND()
 {
 	bool x = checkToken((*TokenIterator)->value == ")", "punc");
+	if (x)
+		tree.goUp();
+	return x;
+}
+bool Parser::BRACKET_L_TRG()
+{
+	bool x = checkToken((*TokenIterator)->value == "<", "punc");
+	if (x)
+		return tree.addToken(last_token, TokenType::SPECIAL);
+	return x;
+}
+bool Parser::BRACKET_R_TRG()
+{
+	bool x = checkToken((*TokenIterator)->value == ">", "punc");
 	if (x)
 		tree.goUp();
 	return x;
