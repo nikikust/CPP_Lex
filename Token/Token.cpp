@@ -7,7 +7,7 @@ std::string getName(TokensEnum token)
 	case TokensEnum::PUNCTUATOR:		return "PUNCTUATOR";
 	case TokensEnum::COMMENT:			return " COMMENT  ";
 	case TokensEnum::IDENTIFIER:		return "IDENTIFIER";
-	case TokensEnum::FLOAT:				return "  FLOAT   ";
+	case TokensEnum::DOUBLE:			return "  DOUBLE  ";
 	case TokensEnum::INT:				return "   INT    ";
 	case TokensEnum::BOOL:				return "   BOOL   ";
 	case TokensEnum::STRING:			return "  STRING  ";

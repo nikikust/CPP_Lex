@@ -5,34 +5,19 @@ enum class TokensEnum	// For LEXER
 {
 	PUNCTUATOR = 1,
 	COMMENT,
-	FLOAT,
+	DOUBLE,
 	INT,
-	BOOL,
 	IDENTIFIER,
 	STRING,
 	OP_BINAR,
 	NEWLINE,
+	BOOL,
 	OP_UNAR_PREF,
 	OP_UNAR_POST,
 	KEYWORD,
 	SIMPLETYPE,
 	TEMPLATEDTYPE,
 	_EOF,
-};
-
-enum class TokenType	// For PARSER and next
-{
-	PROBE,		//EMPTY node
-	IDENTIFIER,
-	CONSTANT,
-	OPERATION,
-	TYPE,		// void, int, MyType
-	JMP,		// JUMP
-	CJM,		// conditional JUMP
-	SPECIAL,	// Root
-	CLEANER,	// remove 2+2; etc from interpreter stack
-	DESTRUCTOR,
-	_EOF
 };
 
 std::string getName(TokensEnum token);

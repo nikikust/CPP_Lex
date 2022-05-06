@@ -22,13 +22,13 @@ void Parser::printRPN(bool full)
 	{
 		auto node = *it;
 
-		std::cout << "(" << cnt << "): ";
+		std::cout << "\n(" << cnt << "): ";
 		if (node->getType() == TokenType::JMP || node->getType() == TokenType::CJM)
-			std::cout << node->getValue() << "(" << node->getJumper() << ": " << RPN.at(node->getJumper())->getValue() << ")\n";
+			std::cout << node->getValue() << "(" << node->getJumper() << ": " << RPN.at(node->getJumper())->getValue() << ")";
 		else if (node->getType() == TokenType::DESTRUCTOR)
-			std::cout << "~" << node->getValue() << "\n";
+			std::cout << "~" << node->getValue();
 		else
-			std::cout << node->getValue() << "\n";
+			std::cout << node->getValue();
 
 		++it; ++cnt;
 	}
@@ -39,13 +39,19 @@ bool Parser::formRPN()
 
 	if (tree.rpn_ok)
 		for (auto& obj : out)
-			this->RPN.push_back(std::make_shared<RPN_Element>(*obj));
+			this->RPN.push_back(std::make_shared<RPN_Element>(
+				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper()));
 	return tree.rpn_ok;
 }
 void Parser::showVars()
 {
 	if (tree.rpn_ok)
 		tree.showVars();
+}
+void Parser::showFunctions()
+{
+	if (tree.rpn_ok)
+		tree.showFunctions();
 }
 
 bool Parser::checkToken(bool x, std::string type, bool moveIter)
@@ -85,21 +91,22 @@ bool Parser::lang(tokenVect& TokenVect)
 	TokenIterator = Tokens.begin();
 
 	while (TokenIterator != Tokens.end())
-		if (!(TRY(statement()) || TRY(declaration()) || TRY(class_declaration())))
+	{
+		if (!(declaration() || class_declaration() || statement()))
 			return 0;
+	}
 	return 1;
 }
 
 bool Parser::statement()
 {
-	int a = 1;
-	
 	bool x = StateOK && 
 		     ( block() 
 		    || full_variable_declaration()
 		    || cycle_statement()
 		    || selection_statement()
 		    || jump_statements()
+			|| return_statement()
 		    || arifmetic_expression_list()
 		    || _EOF()
 		     );
@@ -124,9 +131,15 @@ bool Parser::block()
 bool Parser::declaration()
 {
 	if (TRY(type_specification()))
-		TRY(function_declaration()) || TRY(variable_declaration());
+	{
+		if (TRY(function_declaration())) {}
+		else if (TRY(variable_declaration())) {}
+	}
 	else if (TRY(VOID()))
+	{
+		USE(IDENTIFIER());
 		USE(function_declaration());
+	}
 	else
 		return 0;
 
@@ -222,7 +235,7 @@ bool Parser::after_keyword()
 bool Parser::jump_statements()
 {
 	return StateOK && 
-		  (RETURN() || BREAK() || CONTINUE());
+		  (BREAK() || CONTINUE());
 }
 bool Parser::arifmetic_expression_list()
 {
@@ -250,9 +263,22 @@ bool Parser::function_declaration()
 	if (!TRY(BRACKET_L_RND()))
 		return 0;
 
-	USE(attributes_list());
+	if (TRY(attributes_list()))
+		tree.goUp();
+
 	USE(BRACKET_R_RND());
+	
 	USE(after_keyword());
+
+	return StateOK;
+}
+bool Parser::return_statement()
+{
+	if (!TRY(RETURN()))
+		return 0;
+
+	TRY(arifmetic_expression());
+	tree.goUp();
 
 	return StateOK;
 }
@@ -287,7 +313,7 @@ bool Parser::type_specification()
 	if (!TRY(specificator()))
 		return 0;
 
-	TRY(array_declatation_part());
+	//TRY(array_declatation_part());
 	USE(IDENTIFIER());
 
 	return StateOK;
@@ -297,7 +323,7 @@ bool Parser::declarator()
 	if (!( TRY(SIMPLE_TYPE()) || TRY(CLASS()) ))
 		return 0;
 
-	TRY(array_declatation_part());
+	//TRY(array_declatation_part());
 	USE(IDENTIFIER());
 
 	return StateOK;
@@ -319,7 +345,10 @@ bool Parser::attributes_list()
 		return 0;
 
 	while (TRY(COMMA()))
+	{
+		tree.goUp();
 		USE(type_specification());
+	}
 
 	return StateOK;
 }
@@ -340,7 +369,7 @@ bool Parser::for_condition_expr()
 		return 0;
 
 	tree.addNode(); tree.goDown();
-	if (TRY(variable_declaration()))
+	if (TRY(full_variable_declaration()))
 		tree.goUp();
 	else
 		TRY(arifmetic_expression_list());
@@ -433,7 +462,7 @@ bool Parser::postfix_operations()
 bool Parser::literal()
 {
 	return StateOK &&
-		  (IDENTIFIER() || STRING() || INT() || FLOAT() || BOOL());
+		  (IDENTIFIER() || STRING() || INT() || DOUBLE() || BOOL());
 }
 
 
@@ -458,9 +487,9 @@ bool Parser::INT()
 		return tree.addToken(last_token, TokenType::CONSTANT);
 	return x;
 }
-bool Parser::FLOAT()
+bool Parser::DOUBLE()
 {
-	bool x = checkToken((*TokenIterator)->type == TokensEnum::FLOAT, "FLOAT");
+	bool x = checkToken((*TokenIterator)->type == TokensEnum::DOUBLE, "DOUBLE");
 	if (x)
 		return tree.addToken(last_token, TokenType::CONSTANT);
 	return x;
@@ -683,14 +712,22 @@ bool Parser::BRACKET_L_TRG()
 {
 	bool x = checkToken((*TokenIterator)->value == "<", "punc");
 	if (x)
+	{
+		++trig;
 		return tree.addToken(last_token, TokenType::SPECIAL);
+	}
 	return x;
 }
 bool Parser::BRACKET_R_TRG()
 {
 	bool x = checkToken((*TokenIterator)->value == ">", "punc");
 	if (x)
+	{
 		tree.goUp();
+		--trig;
+		if (trig > 0)
+			tree.goUp();
+	}
 	return x;
 }
 bool Parser::BRACKET_L_SQR()

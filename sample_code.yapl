@@ -1,2 +1,7 @@
-class abc
-{}
+int abc(int a, ptr<int> b) 
+{
+	int c
+	while (a > *b)
+		break
+	return ++<a
+}

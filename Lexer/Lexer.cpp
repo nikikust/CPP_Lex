@@ -1,12 +1,11 @@
 #include <boost/regex.hpp>
 #include <iostream>
 #include <fstream>
-#include <memory>
 
 #include "Lexer.h"
 #include "../profile.h"
 
-constexpr bool USE_COLORS = 0;
+constexpr bool USE_COLORS = 1;
 
 
 static boost::regex REGEX_3000(
@@ -14,7 +13,6 @@ static boost::regex REGEX_3000(
 (\\/\\/[^\\n]*)|\
 ((?:[0-9]+\\.[0-9]*)|(?:\\.[0-9]+))|\
 ([0-9]+)|\
-(true|false)|\
 ([A-Za-z_][A-Za-z0-9_]*)|\
 (\"(?:\\\\.|\\\\\\n|[^\"\\\\\\n])*\")|\
 (>(?:\\+\\+|\\-\\-)|(?:\\+\\+|\\-\\-)<|&&|(?:\\|\\|)|(?:<<|>>)=?|[.]|[\\-+*\\/&|\\\\^<>=!%]=?)|\
@@ -22,8 +20,8 @@ static boost::regex REGEX_3000(
 ([^\\s]+)"
 );
 
-static std::string Keywords("|for|while|if|else|elif|continue|break|return|def|void|this|class|");
-static std::string SimpleTypes("|int|long|double|bool|string|");
+static std::string Keywords("|for|while|if|else|elif|continue|break|return|this|class|");
+static std::string SimpleTypes("|int|double|bool|string|void|");
 static std::string TemplatedTypes("|ptr|list|map|");
 
 std::string operator*(std::string a, unsigned int b)
@@ -89,6 +87,8 @@ int getTokens(tokenVect& Tokens, std::string fileName)
 						Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::SIMPLETYPE, match.str(i), curent_line, pos)));
 					else if (TemplatedTypes.find("|" + match.str(i) + "|") != std::string::npos)
 						Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::TEMPLATEDTYPE, match.str(i), curent_line, pos)));
+					else if (match.str(i) == "true" || match.str(i) == "false")
+						Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::BOOL, match.str(i), curent_line, pos)));
 					else
 						Tokens.push_back(std::move(std::make_shared<Token>(static_cast<TokensEnum>(i), match.str(i), curent_line, pos)));
 				}

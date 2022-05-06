@@ -1,13 +1,7 @@
 #pragma once
-#include <string>
-#include <vector>
 
-#include "../VarTable/VarTable.h"
 #include "../AST/AST.h"
-#include "../RPN/RPN_Element.h"
 
-
-typedef std::vector<std::shared_ptr<RPN_Element>> RPNVect;
 
 class Parser
 {
@@ -18,8 +12,8 @@ class Parser
 	bool StateOK = true;
 	bool WriteToVarTable = false;
 
-	VarTable variables;
 	AST tree;
+	size_t trig = 0;
 	RPNVect RPN;
 
 	std::vector<std::string> knownClasses;
@@ -32,6 +26,7 @@ public:
 	void printRPN(bool full = false);
 	bool formRPN();
 	void showVars();
+	void showFunctions();
 
 	bool checkToken(bool x, std::string type, bool moveIter = true);
 	bool breakCode(std::string message = "");
@@ -51,6 +46,7 @@ public:
 	bool full_variable_declaration();
 	bool variable_declaration();
 	bool function_declaration();
+	bool return_statement();
 	
 	bool specificator();
 	bool templated_specificator();
@@ -82,7 +78,7 @@ public:
 
 	bool IDENTIFIER();
 	bool INT();
-	bool FLOAT();
+	bool DOUBLE();
 	bool STRING();
 	bool BOOL();
 

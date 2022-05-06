@@ -10,7 +10,7 @@ int main(void)
 {
 	setlocale(LC_ALL, "Rus");
 	std::vector<std::shared_ptr<Token>> Tokens;
-	
+
 	{
 		auto a = LogDuration("Lexing time: ");
 		if (!getTokens(Tokens, "sample_code.yapl"))
@@ -72,13 +72,15 @@ int main(void)
 		{
 			parser.printRPN();
 			parser.showVars();
+			std::cout << "\n\n\nFunctions:";
+			parser.showFunctions();
 		}
 	}
 
 	if (parse_result && RPN_result)
-		std::cout << colorText(32) << "\n\nCode generated successfuly!" << colorText();
+		std::cout << "\n\n" << colorText(32) << "Code generated successfuly!" << colorText();
 	else
-		std::cout << colorText(31) << "\n\nCode generation is failed!" << colorText();
+		std::cout << "\n\n" << colorText(31) << "Code generation is failed!" << colorText();
 
 
 	std::cout << "\n\nSend any key: "; int PressAnyKey;

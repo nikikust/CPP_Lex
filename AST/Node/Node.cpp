@@ -29,6 +29,10 @@ void Node::setJumper(size_t me)
 {
 	this->jumper = me;
 }
+void Node::setType(TokenType type)
+{
+	this->type = type;
+}
 
 nodeVect& Node::getChilds()
 {
@@ -144,7 +148,7 @@ bool Node::isFull()
 		std::string val = this->getValue();
 		size_t amount = this->childs.size();
 
-		if (val == "node" || val == "{")
+		if (val == "node" || val == "{" || val == "<")
 			return 0;
 		else if (val == "if" || val == "elif")
 			return amount >= 2;
@@ -152,7 +156,9 @@ bool Node::isFull()
 			return amount >= 2;
 		else if (val == "for")
 			return amount >= 4;
-		else if (val == "else" || val == "print" || val == "input")
+		else if (val == "function_declaration")
+			return amount >= 3;
+		else if (val == "else" || val == "print" || val == "input" || val == "return")
 			return amount >= 1;
 		else if (val == "break" || val == "continue")
 			return 1;
@@ -273,7 +279,6 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	else if (this->getValue() == "if" || this->getValue() == "elif")
 	{
 		nextNamespace();
-		nodeVect::iterator it = this->getChilds().begin();
 
 		nodeVect condition = (*it)->RPN(*it, current_size); ++it;
 		current_size += condition.size();
@@ -326,7 +331,6 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		nextNamespace();
 		lastLoopNamespace.push_back(currentNamespace);
 
-		nodeVect::iterator it = this->getChilds().begin();
 		size_t begin = current_size;
 
 		nodeVect condition = (*it)->RPN(*it, current_size); ++it;
@@ -334,7 +338,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 		output.insert(output.cend(), condition.begin(), condition.end());
 		output.push_back(std::make_shared<Node>(Token(TokensEnum::KEYWORD, "CJM", this->getToken().line, this->getToken().position), TokenType::CJM, output.back()));
-		auto getFromCycle = output.back();
+		auto getFromCycle = output.size() - 1;
 		current_size += 1;
 
 		bool cleanIt = (*it)->getValue() == "{" ||
@@ -369,7 +373,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		current_size += 1;
 
 		output.back()->setJumper(begin);
-		getFromCycle->setJumper(current_size);
+		output.at(getFromCycle)->setJumper(current_size);
 
 		loadCycleRequests(current_size, begin);
 		lastLoopNamespace.pop_back();
@@ -378,8 +382,6 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	{
 		nextNamespace();
 		lastLoopNamespace.push_back(currentNamespace);
-
-		nodeVect::iterator it = this->getChilds().begin();
 
 		nodeVect init_section = (*it)->RPN(*it, current_size, true); ++it;
 		output.insert(output.cend(), init_section.begin(), init_section.end());
@@ -392,11 +394,11 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 		output.insert(output.cend(), condition.begin(), condition.end());
 
-		std::shared_ptr<Node> getFromCycle;
+		size_t getFromCycle;
 		if (!condition.empty())
 		{
 			output.push_back(std::make_shared<Node>(Token(TokensEnum::KEYWORD, "CJM", this->getToken().line, this->getToken().position), TokenType::CJM, output.back()));
-			getFromCycle = output.back();
+			getFromCycle = output.size() - 1;
 			current_size += 1;
 		}
 
@@ -431,11 +433,11 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		current_size += after_body.size();
 		output.insert(output.cend(), after_body.begin(), after_body.end());
 
-		output.push_back(std::make_shared<Node>(Token(TokensEnum::KEYWORD, "JMP", this->getToken().line, this->getToken().position), TokenType::JMP, output.back()));
+		output.push_back(std::make_shared<Node>(Token(TokensEnum::KEYWORD, "JMP", this->getToken().line, this->getToken().position), TokenType::JMP, std::shared_ptr<Node>()));
 		current_size += 1;
 
 		if (!condition.empty())
-			getFromCycle->setJumper(current_size);
+			output.at(getFromCycle)->setJumper(current_size);
 
 		output.back()->setJumper(begin);
 
@@ -456,20 +458,21 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		}
 
 		nodeVect destr;
-		auto it = variables.rbegin();
+		auto it2 = variables.rbegin();
 		do
 		{
-			if (it->first <= lastLoopNamespace.back())
+			if (it2->first <= lastLoopNamespace.back())
 				break;
-			for (auto obj : it->second->getTable())
-				destr.push_back(std::make_shared<Node>(Token(obj.second->getCoinName()), TokenType::DESTRUCTOR, std::shared_ptr<Node>()));
-		} while ((*it++).first > lastLoopNamespace.back());
+			for (auto obj : it2->second->getTable())
+				destr.push_back(std::make_shared<Node>(Token(obj.first), TokenType::DESTRUCTOR, std::shared_ptr<Node>()));
+		} while ((*it2++).first > lastLoopNamespace.back());
 
 		output.insert(output.cend(), destr.begin(), destr.end());
 		current_size += destr.size();
 
 		output.push_back(std::make_shared<Node>(Token(TokensEnum::KEYWORD, "JMP", this->getToken().line, this->getToken().position), TokenType::JMP, std::shared_ptr<Node>()));
 		current_size += 1;
+
 		requestBreak(output.back());
 	}
 	else if (this->getValue() == "continue")
@@ -481,12 +484,14 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			return {};
 		}
 		nodeVect destr;
-		auto it = variables.rbegin();
+		auto it2 = variables.rbegin();
 		do
 		{
-			for (auto obj : it->second->getTable())
-				destr.push_back(std::make_shared<Node>(Token(obj.second->getCoinName()), TokenType::DESTRUCTOR, std::shared_ptr<Node>()));
-		} while ((*it++).first > lastLoopNamespace.back());
+			if (it2->first <= lastLoopNamespace.back())
+				break;
+			for (auto obj : it2->second->getTable())
+				destr.push_back(std::make_shared<Node>(Token(obj.first), TokenType::DESTRUCTOR, std::shared_ptr<Node>()));
+		} while ((*it2++).first > lastLoopNamespace.back());
 
 		output.insert(output.cend(), destr.begin(), destr.end());
 		current_size += destr.size();
@@ -496,9 +501,116 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		
 		requestContinue(output.back());
 	}
+	else if (this->getValue() == "return")
+	{
+		if (!functionDeclaration)
+		{
+			std::cout << colorText(31) << "ERR: 'return' must be inside function. " << this->token.str() << colorText() << "\n";
+			breakCode();
+			return {};
+		}
+
+		nodeVect out = this->getFirstChild()->RPN(this->getFirstChild(), current_size);
+		output.insert(output.cend(), out.begin(), out.end());
+		current_size += out.size();
+
+		output.push_back(me);
+		current_size += 1;
+
+		nodeVect destr;
+		auto it2 = variables.rbegin();
+		do
+		{
+			if (it2->first <= functionNamespace)
+				break;
+			for (auto obj : it2->second->getTable())
+				destr.push_back(std::make_shared<Node>(Token(obj.first), TokenType::DESTRUCTOR, std::shared_ptr<Node>()));
+		} while ((*it2++).first > functionNamespace);
+
+		output.insert(output.cend(), destr.begin(), destr.end());
+		current_size += destr.size();
+
+		output.push_back(std::make_shared<Node>(Token(TokensEnum::KEYWORD, "JMP", this->getToken().line, this->getToken().position), TokenType::JMP, std::shared_ptr<Node>()));
+		current_size += 1;
+
+		requestReturn(output.back());
+	}
 	else if (this->getValue() == "class")
 	{
+		nextNamespace();
+		classDeclaration = true;
+
+
+
+		classDeclaration = false;
+		previousNamespace();
+	}
+	else if (this->getValue() == "function_declaration")
+	{
+		nextNamespace();
+		functionDeclaration = true;
+
+		/*
+		Abstract Syntax Tree:
+		o
+		 `- node : Special <- local root <- cursor
+				|`- function_declaration : Special
+				|       |`- void : Type ---------------------------------------------------- Return type
+				|       |        `- main : Identifier -------------------------------------- Name
+				|       |`- node : Special ------------------------------------------------- Attributes
+				|       |       |`- int : Type
+				|       |       |        `- a : Identifier
+				|       |        `- ptr : Type
+				|       |               |`- < : Special
+				|       |               |        `- int : Type
+				|       |                `- b : Identifier
+				|        `- { : Special ---------------------------------------------------- Body
+				|               |`- int : Type
+				|               |        `- = : Operation
+				|               |               |`- c : Identifier
+				|               |                `- + : Operation
+				|               |                       |`- a : Identifier
+				|               |                        `- * : Operation
+				|               |                                `- b : Identifier
+				|                `- return : Special
+				|                        `- c : Identifier
+				 `- EOF : EOF
+		*/
+
+		nodeVect typeAndName = (*it)->RPN(*it, current_size);
+		std::string functionName = typeAndName.front()->getValue();
+		std::string functionReturnType = typeAndName.back()->getValue();
+		++it;
+
+		if (functions.getTable().contains(functionName))
+		{
+			std::cout << colorText(31) << "ERR: function name duplication. " << (*it)->token.str() << colorText() << "\n";
+			breakCode();
+			return {};
+		}
+
+		nextNamespace();
+		functionNamespace = currentNamespace;
+		nodeVect attributesVect = (*it)->RPN(*it, current_size);
+		CoinTable attributes = *variables[currentNamespace];
 		
+		++it;
+
+		nodeVect body = (*it)->RPN(*it, 0);
+		body.push_back(std::make_shared<Node>(Token("EOF"), TokenType::_EOF, std::shared_ptr<Node>()));
+		loadReturnRequests(body.size() - 1);
+		
+		RPNVect bodyRPN;
+		for (auto obj : body)
+			bodyRPN.push_back(std::make_shared<RPN_Element>(
+				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper()));
+
+		functions.putFunction(functionName, std::make_shared<CoinTable>(attributes), functionReturnType, std::make_shared<RPNVect>(bodyRPN));
+
+		previousNamespace();
+
+		functionDeclaration = false;
+		previousNamespace();
 	}
 	else if (this->getType() == TokenType::PROBE)
 	{
@@ -508,21 +620,42 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	}
 	else if (this->getType() == TokenType::TYPE)
 	{
+		if (this->getToken().type == TokensEnum::TEMPLATEDTYPE)
+			++it;
+
 		while (it != this->getChilds().end())
 		{
 			if ((*it)->getType() == TokenType::OPERATION)
 			{
 				if (varExists((*it)->getFirstChild()->getValue()))
 				{
-					std::cout << colorText(31) << "ERR: variable duplication. " << (*it)->getFirstChild()->token.str() << colorText() << "\n";
+					std::cout << colorText(31) << "ERR: variable name duplication. " << (*it)->getFirstChild()->token.str() << colorText() << "\n";
 					breakCode();
 					return {};
 				}
 
 				output.push_back((*it)->getFirstChild());
 				output.push_back(me);
-				variables[currentNamespace]->putVar((*it)->getFirstChild()->getValue(), toVarType[this->getValue()], currentNamespace);
 
+				if (this->getValue() == "int")
+					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), NumType::INT);
+				else if (this->getValue() == "double")
+					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), NumType::DOUBLE);
+				else if (this->getValue() == "bool")
+					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), NumType::BOOL);
+				else if (this->getValue() == "ptr")
+					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), this->getFirstChild()->concatTypes());
+				else if (this->getValue() == "string")
+					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue());
+				//else if (classes.contains(this->getValue()))
+				//	variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), classes[this->getValue()]);
+				else
+				{
+					std::cout << colorText(31) << "ERR: unknown variable type. " << this->token.str() << colorText() << "\n";
+					breakCode();
+					return {};
+				}
+				
 				current_size += 2;
 
 				nodeVect out = (*it)->RPN(*it, current_size);
@@ -536,23 +669,45 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			{
 				if (varExists((*it)->getValue()))
 				{
-					std::cout << colorText(31) << "ERR: variable duplication. " << (*it)->token.str() << colorText() << "\n";
+					std::cout << colorText(31) << "ERR: variable name duplication. " << (*it)->token.str() << colorText() << "\n";
 					breakCode();
 					return {};
 				}
 				output.push_back(*it);
 				output.push_back(me);
-				variables[currentNamespace]->putVar((*it)->getValue(), toVarType[this->getValue()], currentNamespace);
+				
+				if (this->getValue() == "int")
+					variables[currentNamespace]->putCoin((*it)->getValue(), NumType::INT);
+				else if (this->getValue() == "double")
+					variables[currentNamespace]->putCoin((*it)->getValue(), NumType::DOUBLE);
+				else if (this->getValue() == "bool")
+					variables[currentNamespace]->putCoin((*it)->getValue(), NumType::BOOL);
+				else if (this->getValue() == "ptr")
+					variables[currentNamespace]->putCoin((*it)->getValue(), this->getFirstChild()->concatTypes());
+				else if (this->getValue() == "string")
+					variables[currentNamespace]->putCoin((*it)->getValue());
+				//else if (classes.contains(this->getValue()))
+				//	variables[currentNamespace]->putCoin((*it)->getValue(), classes[this->getValue()]);
+				else
+				{
+					std::cout << colorText(31) << "ERR: unknown variable type. " << this->token.str() << colorText() << "\n";
+					breakCode();
+					return {};
+				}
+
 				current_size += 2;
 			}
-			it++;
+			++it;
 		}
+
+		if (this->getToken().type == TokensEnum::TEMPLATEDTYPE)
+			this->setName(this->getValue() + "<" + this->getFirstChild()->concatTypes() + ">");
 	}
 	else 
 	{
 		if (this->getValue() == "{" || this->getValue() == "else")
 			nextNamespace();
-		else if (this->getToken().type == TokensEnum::IDENTIFIER && !varExists(this->getValue()) && this->getParent()->getValue() != "class")
+		else if (this->getToken().type == TokensEnum::IDENTIFIER && !varExists(this->getValue()))
 		{
 			std::cout << colorText(31) << "ERR: unknown variable. " << this->token.str() << colorText() << "\n";
 			breakCode();
@@ -601,6 +756,10 @@ void Node::requestContinue(std::shared_ptr<Node> me)
 {
 	toContinue.push_back(me);
 }
+void Node::requestReturn(std::shared_ptr<Node> me)
+{
+	toReturn.push_back(me);
+}
 void Node::loadCycleRequests(size_t indexBreak, size_t indexContinue)
 {
 	while (!toBreak.empty())
@@ -614,17 +773,26 @@ void Node::loadCycleRequests(size_t indexBreak, size_t indexContinue)
 		toContinue.pop_back();
 	}
 }
+void Node::loadReturnRequests(size_t indexReturn)
+{
+	while (!toReturn.empty())
+	{
+		toReturn.back()->setJumper(indexReturn);
+		toReturn.pop_back();
+	}
+}
+
 
 void Node::nextNamespace()
 {
 	currentNamespace = ++maxNamespace;
-	variables.insert(std::pair<size_t, std::shared_ptr<VarTable>>(currentNamespace, std::make_shared<VarTable>()));
+	variables.insert({ currentNamespace, std::make_shared<CoinTable>() });
 }
 nodeVect Node::previousNamespace()
 {
 	nodeVect out;
 	for (auto obj : variables.rbegin()->second->getTable())
-		out.push_back(std::make_shared<Node>(Token(obj.second->getCoinName()), TokenType::DESTRUCTOR, std::shared_ptr<Node>()));
+		out.push_back(std::make_shared<Node>(Token(obj.first), TokenType::DESTRUCTOR, std::shared_ptr<Node>()));
 	
 	variables.erase(variables.rbegin()->first);
 	//auto it = variables.rbegin(); it++;
@@ -640,9 +808,33 @@ void Node::showVars()
 	{
 		std::cout << "\n\nNamespace[" << nmspce.first << "] Variables: (size: " << nmspce.second->getTable().size() << ") ";
 		for (auto& coin : nmspce.second->getTable())
+			std::cout << "\n" << coin.second->str();
+	}
+}
+void Node::showFunctions()
+{
+	for (auto obj : functions.getTable())
+	{
+		std::cout << "\n\n" << obj.second->getReturnValueType() << " " << obj.first << " - attributes(";
+		for (auto attr : obj.second->getAttributes()->getTable())
+			std::cout << " " << attr.first << ": " << attr.second->getType();
+		std::cout << " )";
+
+		RPNVect::iterator it = obj.second->getProgram()->begin();
+		size_t cnt = 0;
+		while (it != obj.second->getProgram()->end())
 		{
-			auto obj = std::dynamic_pointer_cast<CoinVar>(coin.second);
-			std::cout << "\n" << obj->str();
+			std::shared_ptr<RPN_Element> node = *it;
+
+			std::cout << "\n~(" << cnt << "): ";
+			if (node->getType() == TokenType::JMP || node->getType() == TokenType::CJM)
+				std::cout << node->getValue() << "(" << node->getJumper() << ": " << obj.second->getProgram()->at(node->getJumper())->getValue() << ")";
+			else if (node->getType() == TokenType::DESTRUCTOR)
+				std::cout << "~" << node->getValue();
+			else
+				std::cout << node->getValue();
+
+			++it; ++cnt;
 		}
 	}
 }
@@ -651,14 +843,33 @@ bool Node::varExists(std::string name)
 	auto it = variables.rbegin();
 	while (it != variables.rend())
 	{
-		if (it->second->varExists(name))
+		if (it->second->coinExists(name))
 		{
 			return true;
 			break;
 		}
-		it++;
+		++it;
 	}
 	return false;
+}
+std::string Node::concatTypes()
+{
+	if (this->getChilds().empty())
+		return getValue();
+	else if (this->getValue() != "<")
+		return getValue() + "<" + this->getFirstChild()->concatTypes() + ">";
+
+	nodeVect::iterator it = childs.begin();
+	std::string buf = (*it)->concatTypes();
+
+	++it;
+	while (it != childs.end())
+	{
+		buf += ", " + (*it)->concatTypes();
+		++it;
+	}
+
+	return buf;
 }
 
 

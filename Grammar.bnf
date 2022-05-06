@@ -1,48 +1,72 @@
-lang	:-	statement*;
+lang	:-	(declaration | statement | class_declaration)*
+		;
 
 statement	:-	block
-			|	declaration
+			|	full_variable_declaration
 			|	cycle_statement
 			|	selection_statement
 			|	jump_statements
+			|	return_statement
 			|	arifmetic_expression_list
-			|	SEMICOLON
+			|	// SEMICOLON
 			;
+
+full_variable_declaration	:-	type_specification variable_declaration?
+							;
 
 block 	:-	L_FIG statement* R_FIG
 		;
- 
-declaration	:-	variable_declaration
-			|	function_declaration
+
+declaration	:-	type_specification (function_declaration | 
+									variable_declaration?)
+			|	VOID function_declaration
 			;
 
-variable_declaration	:-	declarator (STRONG_ASSIGN_OP arifmetic_expression)? extended_declaration*
-						;
+class_declaration	:-	CLASS IDENTIFIER class_block
+					;
 
-declarator	:-	(TYPE_SPECIFIER | CLASS) array_declatation_part? IDENTIFIER
+class_block	:-	L_FIG declaration* R_FIG
 			;
 
-array_declatation_part	:-	L_SQR INT R_SQR
-						;
+type_specification	:-	specificator array_declaration_part? IDENTIFIER
+					;
 
-function_declaration	:-	DEF IDENTIFIER L_RND attributes_list? R_RND after_keyword
-						;
-
-attributes_list	:-	attribute (COMMA attribute)*
+specificator	:-	templated_specificator 
+				|	simple_specificator
 				;
 
-attribute	:-	TYPE_SPECIFIER POINTER* IDENTIFIER
-			;
+templated_specificator	:- TEMPLATED_TYPE L_TRG specificator (COMMA specificator)* R_TRG
+						;
 
+simple_specificator	:-	SIMPLE_TYPE 
+					|	CLASS_TYPE
+					;
+
+array_declaration_part	:-	L_SQR INT R_SQR
+						;
+
+function_declaration	:-	L_RND attributes_list? R_RND after_keyword
+						;
+
+attributes_list	:-	type_specification (COMMA type_specification)*
+				;
+
+variable_declaration	:-	(STRONG_ASSIGN_OP arifmetic_expression)? extended_declaration*
+						;
+
+.....................................................................................................................................................
 extended_declaration	:-	COMMA IDENTIFIER (STRONG_ASSIGN_OP arifmetic_expression)?
 						;
 
+return_statement	:-	RETURN arifmetic_expression?
+					;
+
 cycle_statement	:-	FOR for_condition_expr after_keyword
 				|	WHILE condition_expr after_keyword
-				|	// DO after_keyword WHILE condition_expr ?
+				|	// DO after_keyword WHILE condition_expr SEMICOLON?
 				;
 
-for_condition_expr	:-	L_RND (variable_declaration | arifmetic_expression_list)? SEMICOLON condition? SEMICOLON arifmetic_expression_list? R_RND
+for_condition_expr	:-	L_RND (full_variable_declaration | arifmetic_expression_list)? SEMICOLON condition? SEMICOLON arifmetic_expression_list? R_RND
 					;
 
 selection_statement	:-	IF condition_expr after_keyword (ELIF condition_expr after_keyword)* (ELSE after_keyword)?
@@ -53,8 +77,7 @@ after_keyword	:-	block
 				|	statement
 				;
 
-jump_statements	:-	RETURN
-				|	BREAK
+jump_statements	:-	BREAK
 				|	CONTINUE
 				;
 
@@ -67,7 +90,7 @@ condition	:-	arifmetic_expression
 arifmetic_expression_list	:-	arifmetic_expression (COMMA arifmetic_expression)*
 							;
 
-arifmetic_expression	:-	unary_expression (BINAR_OP arifmetic_expression)*
+arifmetic_expression	:-	unary_expression (BINAR_OP arifmetic_expression)?
 						;
 
 unary_expression	:-	OP_UNAR_PREF unary_expression

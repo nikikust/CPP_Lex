@@ -1,7 +1,5 @@
 #pragma once
-#include <memory>
 
-#include "../Lexer/Lexer.h"
 #include "Node/Node.h"
 
 
@@ -13,11 +11,10 @@ class AST
 	std::shared_ptr<Node> local_root;
 
 	std::shared_ptr<Node> cursor;
-	nodeVect toJump;
-
 
 public:
 	bool rpn_ok = true;
+
 	AST();
 
 	void ret();
@@ -34,4 +31,5 @@ public:
 	nodeVect RPN();
 
 	void showVars();
+	void showFunctions();
 };
