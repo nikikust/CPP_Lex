@@ -10,26 +10,32 @@ enum class CoinType
 	NUMERIC,
 	STRING,
 	POINTER,
-	OBJECT
+	OBJECT,
+	ERR_TYPE
 };
 class Coin
 {
 protected:
 	CoinType type;
 	std::string name;
+	uint32_t ID = 0;
 	bool Const = false;
+
+	inline static uint32_t coin_ID = 0;
 
 public:
 	Coin(CoinType type, std::string name, bool Const = false) :
-		type(type), name(name), Const(Const) {}
+		type(type), name(name), Const(Const), ID(coin_ID++) {}
+	Coin() :
+		type(CoinType::ERR_TYPE), name(""), Const(true) {}
+	virtual ~Coin() = default;
 
 	CoinType getCoinType();
 	std::string getName();
 	bool isConst();
 	void setName(std::string name);
+	void setConst(bool Const);
 
 	virtual std::string getType() = 0;
 	virtual std::string str() = 0;
-
-	virtual ~Coin() = default;
 };

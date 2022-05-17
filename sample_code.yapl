@@ -1,7 +1,56 @@
-int abc(int a, ptr<int> b) 
+class tetris
 {
-	int c
-	while (a > *b)
-		break
-	return ++<a
+	bool abc(int delta, ptr<ptr<bool> > gamma)
+	{
+		if (**gamma != false)
+		{
+			return delta
+		}
+		return **gamma
+	}
+	ptr<int> getPointer(int a)
+	{
+		return &a
+	}
 }
+class tetris2
+{
+	
+	bool abc(int delta, ptr<ptr<bool> > gamma)
+	{
+		if (**gamma != false)
+		{
+			return delta
+		}
+		return **gamma
+	}
+	ptr<int> getPointer(int a)
+	{
+		return &a
+	}
+
+}
+int allOK()
+{
+	int y
+	print("ALL OK!!!!!!!!!!!!!")
+	return 0
+}
+ptr<tetris> classTest
+ptr<tetris> classTest2
+ptr<tetris> classTest3
+ptr<tetris> classTest4
+ptr<tetris> classTest21
+ptr<tetris> classTest31
+ptr<tetris> classTest41
+ptr<ptr<bool> > gosha
+tetris ohMyTetris
+**gosha = ohMyTetris.abc(12, gosha)
+
+
+ptr< ptr<int> > pointer
+**pointer += *ohMyTetris.getPointer(2)
+ptr<ptr<string> > a
+print("data> ")
+int ab = 2
+input(**a)

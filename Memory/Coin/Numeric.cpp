@@ -20,9 +20,9 @@ std::string Numeric::str()
 {
 	switch (numericType)
 	{
-	case NumType::INT:		return "int " + name + " = " + std::to_string((int)data);
-	case NumType::DOUBLE:	return "double " + name + " = " + std::to_string(data);
-	case NumType::BOOL:		return "bool " + name + " = " + std::to_string((bool)data);
+	case NumType::INT:		return ((Const) ? "const int " : "int " ) + name + " = " + std::to_string((int)data);
+	case NumType::DOUBLE:	return ((Const) ? "const double " : "double ") + name + " = " + std::to_string(data);
+	case NumType::BOOL:		return ((Const) ? "const bool " : "bool ") + name + " = " + std::to_string((bool)data);
 	default:				return "error-type " + name + " = " + std::to_string(data);
 	}
 }
@@ -33,4 +33,23 @@ int Numeric::getInt()
 double Numeric::get()
 {
 	return data;
+}
+
+json Numeric::to_json_edt()
+{
+	json j =
+	{
+		{"CoinType", type},
+		{"name", name},
+		{"ID", ID},
+		{"Const", Const},
+		{"data", 
+			{
+				{"data", data},
+				{"NumType", numericType}
+			}
+		}
+	};
+
+	return j;
 }

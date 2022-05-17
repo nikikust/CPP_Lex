@@ -1,25 +1,52 @@
 #include "Pointer.h"
 
 
+Pointer::~Pointer()
+{
+	data = nullptr;
+}
+
 std::string Pointer::getType()
 {
-	return "pointer<" + this->storingType + ">";
+	return "ptr<" + this->storingType + ">";
+}
+std::string Pointer::getStoringType()
+{
+	return storingType;
 }
 std::string Pointer::str()
 {
-	return "ptr<" + storingType + "> " + name;// +" -> " + data->getName();
+	return ((Const) ? "const ptr<" : "ptr<") + storingType + "> " + name;// +" -> " + data->getName();
 }
 
 void Pointer::set(std::shared_ptr<Coin> new_data, std::string storingType)
 {
 	this->data = new_data;
-	this->storingType = storingType;
+	if (storingType != "")
+		this->storingType = storingType;
 }
 std::shared_ptr<Coin> Pointer::get()
 {
 	return data;
 }
-std::string Pointer::getStoringType()
+
+json Pointer::to_json_edt()
 {
-	return storingType;
+	json buf;
+	to_json_edt2(buf, data);
+	json j =
+	{
+		{"CoinType", type},
+		{"name", name},
+		{"ID", ID},
+		{"Const", Const},
+		{"data",
+			{
+				{"data", buf},
+				{"storingType", storingType}
+			}
+		}
+	};
+
+	return j;
 }

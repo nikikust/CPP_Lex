@@ -1,7 +1,9 @@
 #pragma once
 #include <string>
 
-enum class TokensEnum	// For LEXER
+#include "../Memory/InitJSON.h"
+
+enum class TokensEnum
 {
 	PUNCTUATOR = 1,
 	COMMENT,

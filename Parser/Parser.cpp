@@ -1,11 +1,19 @@
 #include <iostream>
 #include <algorithm>
+#include <fstream>
+#include <filesystem>
 
 #include "Parser.h"
 #include "../profile.h"
 
+#define _single_data_file
+
 
 Parser::Parser() {}
+Parser::~Parser()
+{
+	RPN.clear();
+}
 
 void Parser::printTree(bool newView)
 {
@@ -48,10 +56,58 @@ void Parser::showVars()
 	if (tree.rpn_ok)
 		tree.showVars();
 }
+void Parser::showClasses()
+{
+	if (tree.rpn_ok)
+		tree.showClasses();
+}
 void Parser::showFunctions()
 {
 	if (tree.rpn_ok)
 		tree.showFunctions();
+}
+
+void Parser::saveData()
+{
+	if (!std::filesystem::exists("output"))
+		std::filesystem::create_directory("output");
+
+#ifndef _single_data_file
+	json RPN_JSON, FUNCTIONS_JSON, CLASSES_JSON, VARIABLES_JSON;
+
+	RPN_JSON = RPN;
+	FUNCTIONS_JSON = tree.getFunctions();
+	CLASSES_JSON = tree.getClasses();
+	VARIABLES_JSON = tree.getVariables();
+
+	std::ofstream fout1("output\\RPN.json");
+	fout1 << RPN_JSON;
+	fout1.close();
+
+	std::ofstream fout2("output\\Functions.json");
+	fout2 << FUNCTIONS_JSON;
+	fout2.close();
+
+	std::ofstream fout3("output\\Classes.json");
+	fout3 << CLASSES_JSON;
+	fout3.close();
+
+	std::ofstream fout4("output\\Variables.json");
+	fout4 << VARIABLES_JSON;
+	fout4.close();
+#else
+	json ALL;
+	ALL["RPN"] = RPN;
+	ALL["Functions"] = tree.getFunctions();
+	ALL["Classes"] = tree.getClasses();
+	ALL["Variables"] = tree.getVariables();
+
+	std::vector<std::uint8_t> v_ubjson = json::to_ubjson(ALL);
+
+	std::ofstream fout("output\\FULL.json", std::ios::out | std::ios::binary);
+	fout.write(reinterpret_cast<const char*>(v_ubjson.data()), v_ubjson.size());
+	fout.close();
+#endif
 }
 
 bool Parser::checkToken(bool x, std::string type, bool moveIter)
@@ -93,7 +149,10 @@ bool Parser::lang(tokenVect& TokenVect)
 	while (TokenIterator != Tokens.end())
 	{
 		if (!(declaration() || class_declaration() || statement()))
+		{
+			breakCode();
 			return 0;
+		}
 	}
 	return 1;
 }
@@ -108,6 +167,9 @@ bool Parser::statement()
 		    || jump_statements()
 			|| return_statement()
 		    || arifmetic_expression_list()
+			|| print_expr()
+			|| input_expr()
+			|| SEMICOLON()
 		    || _EOF()
 		     );
 	
@@ -392,6 +454,31 @@ bool Parser::for_condition_expr()
 	return StateOK;
 }
 
+bool Parser::print_expr()
+{
+	if (!TRY(PRINT()))
+		return 0;
+
+	USE(BRACKET_L_RND());
+	TRY(arifmetic_expression());
+	USE(BRACKET_R_RND());
+	tree.goUp();
+
+	return StateOK;
+}
+bool Parser::input_expr()
+{
+	if (!TRY(INPUT()))
+		return 0;
+
+	USE(BRACKET_L_RND());
+	USE(arifmetic_expression());
+	USE(BRACKET_R_RND());
+	tree.goUp();
+
+	return StateOK;
+}
+
 bool Parser::condition_expr()
 {
 	if (!TRY(BRACKET_L_RND()))
@@ -415,6 +502,7 @@ bool Parser::arifmetic_expression()
 	while (TRY(OP_BINAR()))
 		USE(arifmetic_expression());
 	
+	tree.ret();
 	return StateOK;
 }
 bool Parser::unary_expression()
@@ -424,7 +512,7 @@ bool Parser::unary_expression()
 	else if (TRY(OP_UNAR_BINAR()))
 		USE(unary_expression());
 	else if (TRY(postfix_expression()))
-		while(TRY(postfix_operations())) {}
+		while(TRY(OP_UNAR_POST())) {}
 	else 
 		return 0;
 	return StateOK;
@@ -441,7 +529,21 @@ bool Parser::postfix_expression()
 		return 0;
 	return StateOK;
 }
-bool Parser::postfix_operations()
+
+bool Parser::literal()
+{
+	if (TRY(IDENTIFIER()))
+	{
+		while (TRY(call())) {}
+	}
+	else
+	{
+		return StateOK &&
+			   (STRING() || INT() || DOUBLE() || BOOL());
+	}
+	return StateOK;
+}
+bool Parser::call()
 {
 	if (TRY(BRACKET_L_RND()))
 	{
@@ -453,24 +555,23 @@ bool Parser::postfix_operations()
 		USE(arifmetic_expression());
 		USE(BRACKET_R_SQR());
 	}
-	else if (TRY(OP_UNAR_POST())) {}
 	else
 		return 0;
 	return StateOK;
 }
 
-bool Parser::literal()
-{
-	return StateOK &&
-		  (IDENTIFIER() || STRING() || INT() || DOUBLE() || BOOL());
-}
-
-
 bool Parser::IDENTIFIER()
 {
 	bool x = checkToken((*TokenIterator)->type == TokensEnum::IDENTIFIER, "VAR");
 	if (x)
+	{
+		if (std::find(knownClasses.begin(), knownClasses.end(), last_token.value) != knownClasses.end())
+		{
+			std::cout << colorText(31) << "\nUse of class name as var name is prohibited!" << colorText();
+			return 0;
+		}
 		return tree.addToken(last_token, TokenType::IDENTIFIER);
+	}
 	return x;
 }
 bool Parser::STRING()
@@ -528,8 +629,8 @@ bool Parser::OP_UNAR_BINAR()
 	bool x = checkToken((*TokenIterator)->value == "-" ||
 					    (*TokenIterator)->value == "+" ||
 					    (*TokenIterator)->value == "*" ||
-					    (*TokenIterator)->value == "!" ||
-					    (*TokenIterator)->value == "&", "OP_UNAR_BINAR");
+					    (*TokenIterator)->value == "&" ||
+					    (*TokenIterator)->value == "!", "OP_UNAR_BINAR");
 	if (x)
 	{
 		last_token.type = TokensEnum::OP_UNAR_PREF;
@@ -747,7 +848,10 @@ bool Parser::BRACKET_R_SQR()
 
 bool Parser::SEMICOLON()
 {
-	return checkToken((*TokenIterator)->value == ";", "punc");
+	bool x = checkToken((*TokenIterator)->value == ";", "punc");
+	if (x)
+		tree.ret();
+	return x;
 }
 bool Parser::COMMA()
 {

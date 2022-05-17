@@ -5,6 +5,7 @@
 #include "../../Lexer/Lexer.h"
 #include "../../Memory/Memory.h"
 #include "../../RPN/RPN_Element.h"
+#include "../../Memory/Operations.h"
 
 
 class Node;
@@ -16,8 +17,9 @@ class Node
 	Token token;
 	TokenType type;
 
-	std::shared_ptr<Node> parent;
+	std::weak_ptr<Node> parent;
 	nodeVect childs;
+	size_t jumper;
 
 	inline static bool StateOK = true;
 
@@ -27,19 +29,28 @@ class Node
 
 	inline static std::map<size_t, std::shared_ptr<CoinTable>> variables;
 	inline static FunctionTable functions;
+	inline static ClassTable classes;
 	inline static size_t currentNamespace = 0;
 	inline static size_t maxNamespace = 0;
 	inline static std::vector<size_t> lastLoopNamespace;
 	
-	inline static bool classDeclaration = false;
-	inline static bool functionDeclaration = false;
+	inline static std::string classDeclaration = "";
+	inline static std::string functionDeclaration = "";
 	inline static size_t functionNamespace = 0;
 
-	size_t jumper;
+	inline static size_t const_ID = 0;
+	inline static size_t tmp_ID = 0;
 
 public:
 	Node(Token i_token, TokenType i_type, std::shared_ptr<Node> i_parent, size_t jumpTo = 0) :
 		 token(i_token), type(i_type), parent(i_parent), jumper(jumpTo) {}
+	~Node();
+	void clearMemory();
+
+	std::map<size_t, std::shared_ptr<CoinTable>>& getVariables();
+	FunctionTable& getFunctions();
+	ClassTable& getClasses();
+
 
 	void breakCode();
 
@@ -50,6 +61,7 @@ public:
 	void setName(std::string name);
 	void setJumper(size_t me);
 	void setType(TokenType type);
+	void setTokenType(TokensEnum type);
 
 	nodeVect& getChilds();
 	std::shared_ptr<Node> getFirstChild();
@@ -58,14 +70,15 @@ public:
 	size_t getJumper();
 	TokenType getType();
 	std::string getValue();
-	Token getToken();
+	Token& getToken();
 	bool getState();
+	std::string getPosition();
 	
 	int getRang();
 	bool isEmpty();
 	bool isFull();
 	
-
+	bool fixLinks(std::shared_ptr<Node> me);
 	std::string str(std::shared_ptr<Node> me, std::shared_ptr<Node> local_root, std::shared_ptr<Node> cursor, bool newView = true, std::string offset_string = "", bool is_last = true);
 	std::string RPN_str(bool full);
 	nodeVect RPN(std::shared_ptr<Node> me, size_t current_size, bool clean = false);
@@ -79,10 +92,20 @@ public:
 
 	void nextNamespace();
 	nodeVect previousNamespace();
+	void addConstant(std::shared_ptr<Node> me);
 	void showVars();
-	void showFunctions();
+	void showFunctions(bool methods = false, std::shared_ptr<FunctionTable> table = {});
+	void showClasses();
+
+	std::shared_ptr<Coin> getCoin(std::string name);
+	std::shared_ptr<Function> getMethodFromDot(std::shared_ptr<Node> pointNode);
 
 	bool varExists(std::string name);
+	std::vector<std::shared_ptr<Coin>> allocate(size_t amount);
+	std::string getOpType();
+	bool areNumerics(std::string a, std::string b);
+	std::shared_ptr<Coin> checkTypes(std::shared_ptr<Node> node, bool throwError = false, std::string expectedType = "");
+	bool functionAttributesCheck(std::shared_ptr<Node> node);
 
 	std::string concatTypes();
 };

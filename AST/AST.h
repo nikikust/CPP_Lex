@@ -16,6 +16,11 @@ public:
 	bool rpn_ok = true;
 
 	AST();
+	~AST();
+
+	std::map<size_t, std::shared_ptr<CoinTable>>& getVariables();
+	FunctionTable& getFunctions();
+	ClassTable& getClasses();
 
 	void ret();
 	void goDown();
@@ -32,4 +37,5 @@ public:
 
 	void showVars();
 	void showFunctions();
+	void showClasses();
 };

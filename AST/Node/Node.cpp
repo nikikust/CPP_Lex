@@ -1,5 +1,31 @@
 #include "Node.h"
 #include "../../profile.h"
+#include "../../Memory/Operations.h"
+
+
+Node::~Node()
+{
+	childs.clear();
+}
+void Node::clearMemory()
+{
+	variables.clear();
+	functions.getTable().clear();
+	classes.getTable().clear();
+}
+
+std::map<size_t, std::shared_ptr<CoinTable>>& Node::getVariables()
+{
+	return variables;
+}
+FunctionTable& Node::getFunctions()
+{
+	return functions;
+}
+ClassTable& Node::getClasses()
+{
+	return classes;
+}
 
 void Node::breakCode()
 {
@@ -33,6 +59,10 @@ void Node::setType(TokenType type)
 {
 	this->type = type;
 }
+void Node::setTokenType(TokensEnum type)
+{
+	this->token.type = type;
+}
 
 nodeVect& Node::getChilds()
 {
@@ -48,7 +78,7 @@ std::shared_ptr<Node> Node::getLastChild()
 }
 std::shared_ptr<Node> Node::getParent()
 {
-	return this->parent;
+	return this->parent.lock();
 }
 size_t Node::getJumper()
 {
@@ -62,13 +92,17 @@ std::string Node::getValue()
 {
 	return this->token.value;
 }
-Token Node::getToken()
+Token& Node::getToken()
 {
 	return this->token;
 }
 bool Node::getState()
 {
 	return this->StateOK;
+}
+std::string Node::getPosition()
+{
+	return "(" + std::to_string(this->token.line) + ", " + std::to_string(this->token.position) + ")";
 }
 
 int Node::getRang()
@@ -181,7 +215,8 @@ bool Node::isFull()
 
 std::string Node::str(std::shared_ptr<Node> me, std::shared_ptr<Node> local_root, std::shared_ptr<Node> cursor, bool newView, std::string offset_string, bool is_last)
 {
-	std::string buf = offset_string + ((is_last && newView) ? " `- " : "`- ") + this->getValue() + " : " + getName(this->getType());
+	std::string buf = offset_string + ((is_last && newView) ? " `- " : "`- ") + this->getValue() + " " + this->getPosition() +
+					  " : " + getName(this->getType());
 	if (me == local_root)
 		buf += " <- local root";
 	if (me == cursor)
@@ -195,14 +230,26 @@ std::string Node::str(std::shared_ptr<Node> me, std::shared_ptr<Node> local_root
 		buf += (*it)->str(*it, local_root, cursor, newView, offset_string + ((it == this->getChilds().end() - 1 && newView)? "\t" : "\t|"), it == this->getChilds().end() - 1);
 		it++;
 	}
-
-	// --- //
-
-	
-
 	return buf;
 }
 
+bool Node::fixLinks(std::shared_ptr<Node> me)
+{
+	nodeVect::iterator it = childs.begin();
+	bool fixed = false;
+
+	while (it != childs.end())
+	{
+		if ((*it)->getParent() != me)
+		{
+			(*it)->setParent(me);
+			fixed = true;
+		}
+		fixed = (*it)->fixLinks(*it) || fixed;
+		++it;
+	}
+	return fixed;
+}
 std::string Node::RPN_str(bool full)
 {
 
@@ -247,13 +294,18 @@ std::string Node::RPN_str(bool full)
 	}
 	return buf;
 }
+
+///
 nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 {
 	if (!StateOK)
 		return {};
 
+	if (this->getType() == TokenType::CONSTANT)
+		addConstant(me);
+
 	nodeVect output;
-	nodeVect::iterator it = this->getChilds().begin();
+	nodeVect::iterator it = this->childs.begin();
 
 	if (this->getType() == TokenType::_EOF)
 	{
@@ -262,6 +314,11 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	}
 	else if (this->getValue() == "(")
 	{
+		if (checkTypes(*it, true, "function") == nullptr || !functionAttributesCheck(me))
+		{
+			breakCode();
+			return {};
+		}
 		auto buf = it++;
 
 		while (it != this->getChilds().end())
@@ -317,7 +374,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 			nextElse->setJumper(current_size);
 
-			nodeVect else_section = (*it)->RPN(*it, current_size);
+			nodeVect else_section = (*it)->RPN(*it, current_size, true);
 			current_size += else_section.size();
 			output.back()->setJumper(current_size);
 
@@ -503,9 +560,17 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	}
 	else if (this->getValue() == "return")
 	{
-		if (!functionDeclaration)
+		if (functionDeclaration == "")
 		{
 			std::cout << colorText(31) << "ERR: 'return' must be inside function. " << this->token.str() << colorText() << "\n";
+			breakCode();
+			return {};
+		}
+
+		std::string val = this->getFirstChild()->getOpType();
+		if (val != functionDeclaration && !areNumerics(val, functionDeclaration))
+		{
+			std::cout << colorText(31) << "ERR: function returns '" << functionDeclaration << "', provided '" << val << "'" << colorText() << "\n";
 			breakCode();
 			return {};
 		}
@@ -535,21 +600,106 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 		requestReturn(output.back());
 	}
+	else if (this->getValue() == "print")
+	{
+		if (this->getChilds().empty())
+		{
+			auto newNode = std::make_shared<Node>(Token(TokensEnum::STRING, "\"\"", 0, 0), TokenType::CONSTANT, me);
+			addConstant(newNode);
+
+			output.push_back(newNode);
+			current_size += 1;
+			output.push_back(me);
+			current_size += 1;
+		}
+		else
+		{
+			std::string type = this->getFirstChild()->getOpType();
+			if (areNumerics(type, "int") || type == "string")
+			{
+				nodeVect out = this->getFirstChild()->RPN(this->getFirstChild(), current_size);
+				output.insert(output.cend(), out.begin(), out.end());
+				current_size += out.size();
+
+				output.push_back(me);
+				current_size += 1;
+			}
+			else
+			{
+				std::cout << colorText(31) << "ERR: expected string or numeric, provided '" << type << "' at "
+						  << this->getPosition() << colorText() << "\n";
+				breakCode();
+				return {};
+			}
+		}
+	}
+	else if (this->getValue() == "input")
+	{
+		std::shared_ptr<Coin> res = checkTypes(this->getFirstChild());
+		if (res == nullptr || res->isConst())
+		{
+			std::cout << colorText(31) << "ERR: expression must be l_value '" << this->getFirstChild()->getValue()
+					  << "' at " << this->getPosition() << colorText() << "\n";
+			breakCode();
+			return {};
+		}
+
+		if (areNumerics(res->getType(), "int") || res->getType() == "string")
+		{
+			nodeVect out = this->getFirstChild()->RPN(this->getFirstChild(), current_size);
+			output.insert(output.cend(), out.begin(), out.end());
+			current_size += out.size();
+
+			output.push_back(me);
+			current_size += 1;
+		}
+		else
+		{
+			std::cout << colorText(31) << "ERR: expected string or numeric, provided '" << res->getType() << "' at "
+				<< this->getFirstChild()->getPosition() << colorText() << "\n";
+			breakCode();
+			return {};
+		}
+	}
 	else if (this->getValue() == "class")
 	{
 		nextNamespace();
-		classDeclaration = true;
+		classDeclaration = (*it)->getValue();
 
+		++it;
 
+		auto body = *it;
 
-		classDeclaration = false;
+		nodeVect::iterator it2 = body->childs.begin();
+		nodeVect fieldsVect;
+		while (it2 != body->childs.end())
+		{
+			if ((*it2)->getType() == TokenType::TYPE)
+			{
+				auto field = (*it2)->RPN(*it2, current_size);
+				fieldsVect.insert(fieldsVect.cend(), field.begin(), field.end());
+				current_size += field.size();
+			}
+			++it2;
+		}
+		CoinTable fields = *variables[currentNamespace];
+		
+		classes.putClass(classDeclaration, std::make_shared<CoinTable>(fields), std::make_shared<FunctionTable>());
+
+		it2 = body->childs.begin();
+		while (it2 != body->childs.end())
+		{
+			if ((*it2)->getType() == TokenType::SPECIAL)
+				(*it2)->RPN(*it2, current_size);
+			++it2;
+		}
+
+		classDeclaration = "";
 		previousNamespace();
 	}
 	else if (this->getValue() == "function_declaration")
 	{
 		nextNamespace();
-		functionDeclaration = true;
-
 		/*
 		Abstract Syntax Tree:
 		o
@@ -580,23 +730,38 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		nodeVect typeAndName = (*it)->RPN(*it, current_size);
 		std::string functionName = typeAndName.front()->getValue();
 		std::string functionReturnType = typeAndName.back()->getValue();
+
+		functionDeclaration = functionReturnType;
+
 		++it;
 
-		if (functions.getTable().contains(functionName))
+		if (classDeclaration == "" && functions.functionExists(functionName))
 		{
-			std::cout << colorText(31) << "ERR: function name duplication. " << (*it)->token.str() << colorText() << "\n";
+			std::cout << colorText(31) << "ERR: function name duplication. " << this->getFirstChild()->getFirstChild()->token.str() << colorText() << "\n";
+			breakCode();
+			return {};
+		}
+		else if (classDeclaration != "" && classes.getClass(classDeclaration)->getMethods()->functionExists(functionName))
+		{
+			std::cout << colorText(31) << "ERR: method name duplication. " << this->getFirstChild()->getFirstChild()->token.str() << colorText() << "\n";
 			breakCode();
 			return {};
 		}
 
+
 		nextNamespace();
 		functionNamespace = currentNamespace;
 		nodeVect attributesVect = (*it)->RPN(*it, current_size);
+		std::vector<std::string> order;
+
+		for (auto& attr : this->childs[1]->childs)
+			order.push_back(attr->getValue());
+
 		CoinTable attributes = *variables[currentNamespace];
-		
+
 		++it;
 
-		nodeVect body = (*it)->RPN(*it, 0);
+		nodeVect body = (*it)->RPN(*it, 0, true);
 		body.push_back(std::make_shared<Node>(Token("EOF"), TokenType::_EOF, std::shared_ptr<Node>()));
 		loadReturnRequests(body.size() - 1);
 		
@@ -605,29 +770,62 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			bodyRPN.push_back(std::make_shared<RPN_Element>(
 				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper()));
 
-		functions.putFunction(functionName, std::make_shared<CoinTable>(attributes), functionReturnType, std::make_shared<RPNVect>(bodyRPN));
+		if (!functionReturnType.starts_with("ptr<"))
+			getCoin(functionName)->setConst(true);
+
+		auto it2 = attributes.getTable().begin();
+		while (it2 != attributes.getTable().end())
+		{
+			if (it2->first.starts_with("##alloc"))
+				it2 = attributes.getTable().erase(it2);
+			else
+				++it2;
+		}
+
+		if (classDeclaration != "")
+			classes.getClass(classDeclaration)->getMethods()->putFunction(
+				functionName, std::make_shared<CoinTable>(attributes), order, getCoin(functionName), std::make_shared<RPNVect>(bodyRPN));
+		else
+			functions.putFunction(
+				functionName, std::make_shared<CoinTable>(attributes), order, getCoin(functionName), std::make_shared<RPNVect>(bodyRPN));
 
 		previousNamespace();
 
-		functionDeclaration = false;
+		functionDeclaration = "";
 		previousNamespace();
 	}
 	else if (this->getType() == TokenType::PROBE)
 	{
 		if (!this->isEmpty())
-			output = this->getLastChild()->RPN(*it, current_size, clean);
-		current_size += output.size();
+		{
+			bool cleanIt = (*it)->getValue() == "{" ||
+						   (*it)->getValue() == "else" ||
+						   (*it)->getValue() == "node" ||
+						   (*it)->getType() == TokenType::PROBE ||
+						   (*it)->getType() == TokenType::TYPE;
+			output = this->getLastChild()->RPN(*it, current_size, clean && cleanIt);
+
+			if (clean && (*it)->getType() != TokenType::SPECIAL && (*it)->getType() != TokenType::_EOF && !cleanIt)
+			{
+				output.push_back(std::make_shared<Node>(Token("' '"), TokenType::CLEANER, std::shared_ptr<Node>()));
+				current_size += 1;
+			}
+
+			current_size += output.size();
+		}
 	}
 	else if (this->getType() == TokenType::TYPE)
 	{
 		if (this->getToken().type == TokensEnum::TEMPLATEDTYPE)
 			++it;
 
-		while (it != this->getChilds().end())
+		while (it != this->childs.end())
 		{
 			if ((*it)->getType() == TokenType::OPERATION)
 			{
-				if (varExists((*it)->getFirstChild()->getValue()))
+				if (varExists((*it)->getFirstChild()->getValue()) ||
+					functions.functionExists((*it)->getFirstChild()->getValue()) ||
+					classes.classExists((*it)->getFirstChild()->getValue()))
 				{
 					std::cout << colorText(31) << "ERR: variable name duplication. " << (*it)->getFirstChild()->token.str() << colorText() << "\n";
 					breakCode();
@@ -647,15 +845,19 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), this->getFirstChild()->concatTypes());
 				else if (this->getValue() == "string")
 					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue());
-				//else if (classes.contains(this->getValue()))
-				//	variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), classes[this->getValue()]);
+				else if (classes.classExists(this->getValue()))
+				{
+					CoinTable newFields = *classes.getClass(this->getValue())->getFields();
+					variables[currentNamespace]->putCoin(
+						(*it)->getFirstChild()->getValue(), classes.getClass(this->getValue()), std::make_shared<CoinTable>(newFields));
+				}
 				else
 				{
 					std::cout << colorText(31) << "ERR: unknown variable type. " << this->token.str() << colorText() << "\n";
 					breakCode();
 					return {};
 				}
-				
+
 				current_size += 2;
 
 				nodeVect out = (*it)->RPN(*it, current_size);
@@ -667,7 +869,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			}
 			else
 			{
-				if (varExists((*it)->getValue()))
+				if (varExists((*it)->getValue()) || functions.functionExists((*it)->getValue()) || classes.classExists((*it)->getValue()))
 				{
 					std::cout << colorText(31) << "ERR: variable name duplication. " << (*it)->token.str() << colorText() << "\n";
 					breakCode();
@@ -675,7 +877,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 				}
 				output.push_back(*it);
 				output.push_back(me);
-				
+
 				if (this->getValue() == "int")
 					variables[currentNamespace]->putCoin((*it)->getValue(), NumType::INT);
 				else if (this->getValue() == "double")
@@ -683,11 +885,25 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 				else if (this->getValue() == "bool")
 					variables[currentNamespace]->putCoin((*it)->getValue(), NumType::BOOL);
 				else if (this->getValue() == "ptr")
+				{
 					variables[currentNamespace]->putCoin((*it)->getValue(), this->getFirstChild()->concatTypes());
+					auto res = this->getFirstChild()->allocate(1);
+					if (res.size() != 1)
+					{
+						breakCode();
+						return {};
+					}
+
+					std::dynamic_pointer_cast<Pointer, Coin>(getCoin((*it)->getValue()))->set(res[0]);
+				}
 				else if (this->getValue() == "string")
 					variables[currentNamespace]->putCoin((*it)->getValue());
-				//else if (classes.contains(this->getValue()))
-				//	variables[currentNamespace]->putCoin((*it)->getValue(), classes[this->getValue()]);
+				else if (classes.classExists(this->getValue()))
+				{
+					CoinTable newFields = *classes.getClass(this->getValue())->getFields();
+					variables[currentNamespace]->putCoin(
+						(*it)->getValue(), classes.getClass(this->getValue()), std::make_shared<CoinTable>(newFields));
+				}
 				else
 				{
 					std::cout << colorText(31) << "ERR: unknown variable type. " << this->token.str() << colorText() << "\n";
@@ -707,16 +923,35 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	{
 		if (this->getValue() == "{" || this->getValue() == "else")
 			nextNamespace();
-		else if (this->getToken().type == TokensEnum::IDENTIFIER && !varExists(this->getValue()))
+		else if (this->getValue() == ".")
+		{
+			if (checkTypes(me, true) == nullptr)
+			{
+				breakCode();
+				return {};
+			}
+		}
+		else if (this->getToken().type == TokensEnum::IDENTIFIER && this->getParent()->getValue() != "." &&
+			     !varExists(this->getValue()) && !functions.functionExists(this->getValue()) &&
+				 !classes.classExists(this->getValue()))
 		{
 			std::cout << colorText(31) << "ERR: unknown variable. " << this->token.str() << colorText() << "\n";
 			breakCode();
 			return {};
 		}
+		else if (this->getType() == TokenType::OPERATION)
+		{
+			if (getOpType() == "")
+			{
+				breakCode();
+				return {};
+			}
+		}
 
 		while (it != this->getChilds().end())
 		{
 			bool cleanIt = (*it)->getValue() == "{" ||
+						   (*it)->getValue() == "else" ||
 						   (*it)->getValue() == "node" ||
 						   (*it)->getType() == TokenType::PROBE ||
 						   (*it)->getType() == TokenType::TYPE;
@@ -743,10 +978,10 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			current_size += destr.size();
 		}
 	}
-
+	
 	return output;
 }
-
+///
 
 void Node::requestBreak(std::shared_ptr<Node> me)
 {
@@ -800,6 +1035,35 @@ nodeVect Node::previousNamespace()
 	return out;
 }
 
+void Node::addConstant(std::shared_ptr<Node> me)
+{
+	std::string name = "##const" + std::to_string(const_ID); 
+	++const_ID;
+
+	switch (me->getToken().type)
+	{
+	case TokensEnum::BOOL:
+		variables[1]->putCoin(name, NumType::BOOL);
+		break;
+	case TokensEnum::DOUBLE:
+		variables[1]->putCoin(name, NumType::DOUBLE);
+		break;
+	case TokensEnum::INT:
+		variables[1]->putCoin(name, NumType::INT);
+		break;
+	case TokensEnum::STRING:
+		variables[1]->putCoin(name);
+		std::dynamic_pointer_cast<String, Coin>(variables[1]->getCoin(name))->set(me->getValue());
+		std::dynamic_pointer_cast<String, Coin>(variables[1]->getCoin(name))->setConst(true);
+		me->setName(name);
+		return;
+	default:
+		return;
+	}
+	std::dynamic_pointer_cast<Numeric, Coin>(variables[1]->getCoin(name))->set(std::stod(me->getValue()));
+	std::dynamic_pointer_cast<Numeric, Coin>(variables[1]->getCoin(name))->setConst(true);
+	me->setName(name);
+}
 void Node::showVars()
 {
 	std::cout << "\n\nNamespaces: (size: " << variables.size() << ") ";
@@ -808,16 +1072,21 @@ void Node::showVars()
 	{
 		std::cout << "\n\nNamespace[" << nmspce.first << "] Variables: (size: " << nmspce.second->getTable().size() << ") ";
 		for (auto& coin : nmspce.second->getTable())
-			std::cout << "\n" << coin.second->str();
+		{
+			if (!coin.first.starts_with("##alloc"))
+				std::cout << "\n" << coin.second->str();
+		}
 	}
 }
-void Node::showFunctions()
+void Node::showFunctions(bool methods, std::shared_ptr<FunctionTable> table)
 {
-	for (auto obj : functions.getTable())
+	FunctionTable useForShow = (methods) ? *table : functions;
+
+	for (auto obj : useForShow.getTable())
 	{
-		std::cout << "\n\n" << obj.second->getReturnValueType() << " " << obj.first << " - attributes(";
+		std::cout << "\n\n" << ((obj.second->getReturnValue()->isConst()) ? "const " : "") + obj.second->getReturnValue()->getType() << " " << obj.first << " - attributes(";
 		for (auto attr : obj.second->getAttributes()->getTable())
-			std::cout << " " << attr.first << ": " << attr.second->getType();
+			std::cout << " " << attr.first << ":" << attr.second->getType();
 		std::cout << " )";
 
 		RPNVect::iterator it = obj.second->getProgram()->begin();
@@ -838,20 +1107,536 @@ void Node::showFunctions()
 		}
 	}
 }
+void Node::showClasses()
+{
+	for (auto obj : classes.getTable())
+	{
+		std::cout << "\n\n# --- Class " << obj.second->getName() << ":\n\n --- Fields --- \n";
+		for (auto field : obj.second->getFields()->getTable())
+			std::cout << field.second->str() << "\n";
+		
+		std::cout << "\n --- Methods --- ";
+		showFunctions(true, obj.second->getMethods());
+	}
+}
+
 bool Node::varExists(std::string name)
 {
 	auto it = variables.rbegin();
 	while (it != variables.rend())
 	{
 		if (it->second->coinExists(name))
-		{
 			return true;
-			break;
-		}
 		++it;
 	}
 	return false;
 }
+std::vector<std::shared_ptr<Coin>> Node::allocate(size_t amount)
+{
+	std::vector<std::shared_ptr<Coin>> output = {};
+
+	int attributes_left = amount;
+	
+	nodeVect::iterator it = this->childs.begin();
+	while (it != this->childs.end() && attributes_left > 0)
+	{
+		std::string Temp_Name = "##alloc" + std::to_string(tmp_ID); ++tmp_ID;
+
+		if ((*it)->getValue() == "int")
+		{
+			variables[1]->putCoin(Temp_Name, NumType::INT);
+			output.push_back(getCoin(Temp_Name));
+		}
+		else if ((*it)->getValue() == "double")
+		{
+			variables[1]->putCoin(Temp_Name, NumType::DOUBLE);
+			output.push_back(getCoin(Temp_Name));
+		}
+		else if ((*it)->getValue() == "bool")
+		{
+			variables[1]->putCoin(Temp_Name, NumType::BOOL);
+			output.push_back(getCoin(Temp_Name));
+		}
+		else if ((*it)->getValue() == "ptr")
+		{
+			variables[1]->putCoin(Temp_Name, (*it)->getFirstChild()->concatTypes());
+			
+			output.push_back(getCoin(Temp_Name));
+			auto res = (*it)->getFirstChild()->allocate(1);
+			
+			if (!StateOK)
+				return {};
+
+			std::dynamic_pointer_cast<Pointer, Coin>(getCoin(Temp_Name))->set(res[0]);
+		}
+		else if ((*it)->getValue() == "string")
+		{
+			variables[1]->putCoin(Temp_Name);
+			output.push_back(getCoin(Temp_Name));
+		}
+		else if (classes.classExists((*it)->getValue()))
+		{
+			CoinTable newFields = *classes.getClass((*it)->getValue())->getFields();
+			variables[1]->putCoin(
+				Temp_Name, classes.getClass((*it)->getValue()), std::make_shared<CoinTable>(newFields));
+			output.push_back(getCoin(Temp_Name));
+		}
+		++it; --attributes_left;
+	}
+
+	if (!(it == this->getChilds().end() && attributes_left == 0))
+	{
+		std::cout << colorText(31) << "\nWrong amount of arguments, expected: " << amount << ", provided: " << this->childs.size()
+			<< " at " << this->getPosition() << colorText();
+		breakCode();
+		return {};
+	}
+	else
+		return output;
+}
+std::shared_ptr<Coin> Node::getCoin(std::string name)
+{
+	auto it = variables.rbegin();
+	while (it != variables.rend())
+	{
+		if (it->second->coinExists(name))
+			return it->second->getTable().at(name);
+		++it;
+	}
+	return std::shared_ptr<Coin>();
+}
+std::shared_ptr<Function> Node::getMethodFromDot(std::shared_ptr<Node> node)
+{
+	std::shared_ptr<Coin> from = checkTypes(node->getFirstChild(), true);
+
+	if (from == nullptr)
+		return nullptr;
+	if (!std::dynamic_pointer_cast<Object, Coin>(from)->getMethods()->functionExists(node->getLastChild()->getValue()))
+	{
+		std::cout << colorText(31) << "\nUnknown member" << node->getLastChild()->getToken().str() << colorText();
+		return nullptr;
+	}
+	return std::dynamic_pointer_cast<Object, Coin>(from)->getMethods()->getFunction(node->getLastChild()->getValue());
+}
+
+
+std::string Node::getOpType()
+{
+	if (this->getType() == TokenType::IDENTIFIER)
+	{
+		if (varExists(this->getValue()))
+			return getCoin(this->getValue())->getType();
+		else
+			return "";
+	}
+	else if (this->getType() == TokenType::CONSTANT)
+	{
+		switch (this->getToken().type)
+		{
+		case TokensEnum::BOOL:		return "bool";
+		case TokensEnum::DOUBLE:	return "double";
+		case TokensEnum::INT:		return "int";
+		case TokensEnum::STRING:	return "string";
+		default:					return "";
+		}
+	}
+	else if (this->getValue() == ".")
+	{
+		auto buf = checkTypes(this->getFirstChild(), true);
+		if (buf != nullptr)
+			return buf->getType();
+		else
+			return "";
+	}
+	else if (this->getValue() == "++<" || this->getValue() == "--<")
+	{
+		if (this->getFirstChild()->getToken().type == TokensEnum::IDENTIFIER &&
+			checkTypes(this->getFirstChild(), true, "variable")->isConst())
+		{
+			std::cout << colorText(31) << "ERR: can't modify constant with " << this->getToken().str() << colorText() << "\n";
+			breakCode();
+			return "";
+		}
+
+		if (this->getFirstChild()->getToken().type == TokensEnum::OP_UNAR_PREF ||
+			this->getFirstChild()->getType() == TokenType::IDENTIFIER)
+		{
+			std::string operand = this->getFirstChild()->getOpType();
+			if (operand == "double" || operand == "int")
+				return operand;
+			else
+			{
+				std::cout << colorText(31) << "ERR: variable (" << operand << ") isn't iteratable after " << this->getToken().str() << colorText() << "\n";
+				breakCode();
+				return "";
+			}
+		}
+		else
+		{
+			std::cout << colorText(31) << "ERR: can't modify constant with " << this->getToken().str() << colorText() << "\n";
+			breakCode();
+			return "";
+		}
+	}
+	else if (this->getValue() == ">++" || this->getValue() == ">--")
+	{
+		if (this->getFirstChild()->getToken().type == TokensEnum::IDENTIFIER &&
+			checkTypes(this->getFirstChild(), true, "variable")->isConst())
+		{
+			std::cout << colorText(31) << "ERR: can't modify constant with " << this->getToken().str() << colorText() << "\n";
+			breakCode();
+			return "";
+		}
+
+		if (this->getFirstChild()->getToken().type == TokensEnum::IDENTIFIER ||
+			this->getFirstChild()->getToken().type == TokensEnum::OP_UNAR_PREF)
+		{
+			std::string operand = this->getFirstChild()->getOpType();
+			if (operand == "double" || operand == "int")
+				return operand;
+			else
+			{
+				std::cout << colorText(31) << "ERR: variable (" << operand << ") isn't iteratable, before " << this->getToken().str() << colorText() << "\n";
+				breakCode();
+				return "";
+			}
+		}
+		else
+		{
+			std::cout << colorText(31) << "ERR: can't modify constant with " << this->getToken().str() << colorText() << "\n";
+			breakCode();
+			return "";
+		}
+	}
+	else if (this->token.type != TokensEnum::OP_BINAR && (this->getValue() == "+" || this->getValue() == "-"))
+	{
+		std::string operand = this->getFirstChild()->getOpType();
+		if (operand == "bool" || operand == "int" || operand == "double")
+			return operand;
+		else
+		{
+			std::cout << colorText(31) << "ERR: can't perform operation - '" << this->getValue() << "' for " << operand << " at "
+				<< this->token.str() << colorText() << "\n";
+			breakCode();
+			return "";
+		}
+	}
+	else if (this->token.type == TokensEnum::OP_UNAR_PREF && this->getValue() == "*")
+	{
+		std::string operand = this->getFirstChild()->getOpType();
+		if (operand.starts_with("ptr<"))
+			return operand.substr(4, operand.size() - 5);
+		else
+		{
+			std::cout << colorText(31) << "ERR: variable (" << operand << ") isn't pointer after " << this->getToken().str() << colorText() << "\n";
+			breakCode();
+			return "";
+		}
+	}
+	else if (this->getValue() == "!")
+	{
+		std::string operand = this->getFirstChild()->getOpType();
+		if (operand == "bool" || operand == "int")
+			return operand;
+		else
+		{
+			std::cout << colorText(31) << "ERR: variable (" << operand << ") isn't boolean after " << this->getToken().str() << colorText() << "\n";
+			breakCode();
+			return "";
+		}
+	}
+	else if (this->token.type == TokensEnum::OP_UNAR_PREF && this->getValue() == "&")
+	{
+		std::string operand = this->getFirstChild()->getOpType();
+		return "ptr<" + operand + ">";
+	}
+	else if (this->getValue() == "(")
+	{
+		auto operand = checkTypes(this->getFirstChild(), true, "function");
+		if (operand == nullptr)
+			return "";
+
+		return operand->getType();
+	}
+	else if (this->getType() == TokenType::OPERATION && this->getRang() == 15)
+	{
+		std::shared_ptr<Coin> res = checkTypes(this->getFirstChild());
+		if (res == nullptr || res->isConst())
+		{
+			std::cout << colorText(31) << "ERR: expression must be l_value '" << this->getFirstChild()->getValue() 
+					  << "' at " << this->getPosition() << colorText() << "\n";
+			breakCode();
+			return "";
+		}
+		if (this->getValue() == "=")
+		{
+			std::string lval = this->getFirstChild()->getOpType();
+			std::string rval = this->getLastChild()->getOpType();
+			if (lval == rval || areNumerics(lval, rval))
+				return rval;
+			else
+			{
+				std::cout << colorText(31) << "ERR: can't assign '" << rval << "' to '" << lval << "' at " << this->getPosition() << colorText() << "\n";
+				breakCode();
+				return "";
+			}
+		}
+		else
+		{
+			Node newNode = *this;
+			newNode.setName(newNode.getValue().substr(0, newNode.getValue().size() - 1));
+			std::string outType = newNode.getOpType();
+
+			return outType;
+		}
+	}
+
+	std::string operand_1 = this->getFirstChild()->getOpType();
+	std::string buf_operand_1 = operand_1;
+	if (operand_1 == "")
+	{
+		if (this->getFirstChild()->getType() == TokenType::IDENTIFIER)
+			std::cout << colorText(31) << "ERR: unknown variable. " << this->getFirstChild()->getToken().str() << colorText() << "\n";
+		breakCode();
+		return "";
+	}
+	if (operand_1.starts_with("ptr<"))
+		operand_1 = "ptr";
+
+	std::string op;
+	if (BinarOperations.contains(operand_1))
+	{
+		if (BinarOperations[operand_1].contains(this->getValue()))
+			op = this->getValue();
+		else if (BinarOperations[operand_1].contains(convertOpToType(this->getRang())))
+			op = convertOpToType(this->getRang());
+		else
+		{
+			std::cout << colorText(31) << "ERR: can't perform operation - '" << this->getValue() << "' for " << buf_operand_1 << " at "
+				<< this->token.str() << colorText() << "\n";
+			breakCode();
+			return "";
+		}
+	}
+	else
+	{
+		std::cout << colorText(31) << "ERR: wrong type of first operand - " << buf_operand_1 << ". for " << this->token.str() << colorText() << "\n";
+		breakCode();
+		return "";
+	}
+
+	std::string operand_2 = this->getLastChild()->getOpType();
+	std::string buf_operand_2 = operand_2;
+	if (operand_2 == "")
+	{
+		if (this->getLastChild()->getType() == TokenType::IDENTIFIER) 
+			std::cout << colorText(31) << "ERR: unknown variable. " << this->getLastChild()->getToken().str() << colorText() << "\n";
+		breakCode();
+		return "";
+	}
+	if (operand_2.starts_with("ptr<"))
+		operand_2 = "ptr";
+
+	if (BinarOperations[operand_1][op].contains(operand_2))
+		return BinarOperations[operand_1][op][operand_2];
+	else
+	{
+		std::cout << colorText(31) << "ERR: wrong type of second operand - " << buf_operand_2 << ". for " << this->token.str() << colorText() << "\n";
+		breakCode();
+		return "";
+	}
+}
+bool Node::areNumerics(std::string a, std::string b)
+{
+	if (a == "bool" || a == "int" || a == "double")
+		if (b == "bool" || b == "int" || b == "double")
+			return true;
+	return false;
+}
+std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwError, std::string expectedType)
+{
+	if (node->getValue() == "(")
+	{
+		return checkTypes(node->getFirstChild(), throwError, "function");
+	}
+	else if (node->getValue() == "*" && node->token.type == TokensEnum::OP_UNAR_PREF)
+	{
+		std::shared_ptr<Coin> obj = checkTypes(node->getFirstChild(), throwError);
+		if (obj == nullptr)
+			return nullptr;
+
+		if (obj->getCoinType() == CoinType::POINTER)
+			return std::dynamic_pointer_cast<Pointer, Coin>(obj)->get();
+	}
+	else if (node->getValue() == "++<" || this->getValue() == "--<")
+	{
+		return checkTypes(node->getFirstChild(), throwError);
+	}
+	else if (node->getValue() == ".")
+	{
+		std::shared_ptr<Coin> obj = checkTypes(node->getFirstChild(), throwError);
+		if (obj == nullptr)
+			return nullptr;
+
+		std::shared_ptr<Node> previousObj;
+		if (node->getFirstChild()->getValue() == ".")
+			previousObj = node->getFirstChild()->getLastChild();
+		else if (node->getFirstChild()->getValue() == "(")
+		{
+			if (node->getFirstChild()->getFirstChild()->getValue() == ".")
+				previousObj = node->getFirstChild()->getFirstChild()->getLastChild();
+			else
+				previousObj = node->getFirstChild()->getFirstChild();
+		}
+		else
+			previousObj = node->getFirstChild();
+
+		if (obj->getCoinType() != CoinType::OBJECT)
+		{
+			if (throwError)
+				std::cout << colorText(31) << "\nVariable:" << previousObj->getToken().str() + " - isn't an Object!" << colorText();
+			return nullptr;
+		}
+
+		// --- //
+
+		std::shared_ptr<Object> object = std::dynamic_pointer_cast<Object, Coin>(obj);
+
+		if (expectedType == "var")
+		{
+			if (object->getFields()->coinExists(node->getLastChild()->getValue()))
+			{
+				return object->getFields()->getCoin(node->getLastChild()->getValue());
+			}
+			else
+			{
+				if (throwError)
+					std::cout << colorText(31) << "\nUnknown field: "
+					<< node->getLastChild()->getToken().str() << " - of '" << node->getLastChild()->getValue() << "'" << colorText();
+				return nullptr;
+			}
+		}
+		else if (expectedType == "function")
+		{
+			if (object->getMethods()->functionExists(node->getLastChild()->getValue()))
+				return object->getMethods()->getFunction(node->getLastChild()->getValue())->getReturnValue();
+			else
+			{
+				if (throwError)
+					std::cout << colorText(31) << "\nUnknown method: "
+					<< node->getLastChild()->getToken().str() << " - of '" << previousObj->getValue() << "'" << colorText();
+				return nullptr;
+			}
+		}
+		else
+		{
+			if (object->getFields()->coinExists(node->getLastChild()->getValue()))
+			{
+				return object->getFields()->getCoin(node->getLastChild()->getValue());
+			}
+			else if (object->getMethods()->functionExists(node->getLastChild()->getValue()))
+			{
+				std::shared_ptr<Function> func = object->getMethods()->getFunction(node->getLastChild()->getValue());
+				auto coin(func->getReturnValue());
+				return coin;
+			}
+			else
+			{
+				if (throwError)
+					std::cout << colorText(31) << "\nUnknown member '" << node->getLastChild()->getToken().str() << "'" << colorText();
+				return nullptr;
+			}
+		}
+	}
+	else if (node->getType() == TokenType::OPERATION)
+		return {};
+
+	if (expectedType == "var")
+	{
+		if (varExists(node->getValue()))
+			return getCoin(node->getValue());
+		else
+		{
+			if (throwError)
+				std::cout << colorText(31) << "\nUnknown variable:" << node->getToken().str() << colorText();
+			return nullptr;
+		}
+	}
+	else if (expectedType == "function")
+	{
+		if (functions.getTable().contains(node->getValue()))
+			return functions.getFunction(node->getValue())->getReturnValue();
+		else
+		{
+			if (throwError)
+				std::cout << colorText(31) << "\nUnknown function: " << node->getToken().str() << colorText();
+			return nullptr;
+		}
+	}
+	else
+	{
+		if (varExists(node->getValue()))
+			return getCoin(node->getValue());
+		else if (functions.getTable().contains(node->getValue()))
+			return getCoin(node->getValue());
+		else
+		{
+			if (throwError)
+				std::cout << colorText(31) << "\nUnknown variable: " + node->getToken().str() << colorText();
+			return nullptr;
+		}
+	}
+}
+bool Node::functionAttributesCheck(std::shared_ptr<Node> node)
+{
+	nodeVect attributes = node->getChilds();
+	nodeVect::iterator attribute = attributes.begin();
+	std::shared_ptr<Function> func;
+	if ((*attribute)->getValue() == ".")
+		func = getMethodFromDot(*attribute);
+	else
+		func = functions.getFunction((*attribute)->getValue());
+	++attribute;
+
+	std::vector<std::string> attrOrder = func->getAttributesOrder();
+	std::vector<std::string> ::iterator order = attrOrder.begin();
+	
+	while (order != attrOrder.end() && attribute != attributes.end())
+	{
+		std::string result;
+
+		if ((*attribute)->getType() == TokenType::CONSTANT)
+		{
+			switch ((*attribute)->getToken().type)
+			{
+			case TokensEnum::BOOL:		result = "bool";	break;
+			case TokensEnum::DOUBLE:	result = "double";	break;
+			case TokensEnum::INT:		result = "int";		break;
+			case TokensEnum::STRING:	result = "string";	break;
+			default:					result = "";		break;
+			}
+		}
+		else
+			result = checkTypes(*attribute)->getType();
+
+		if (*order != result)
+		{
+			std::cout << colorText(31) << "\nWrong attribute type '" << result << "' instead of '" << *order << "'. Argument " 
+					  << (order - attrOrder.begin() + 1) << " of " << func->getName() << "() at ("
+					  << node->getFirstChild()->getToken().line << "," << node->getFirstChild()->getToken().position << ") " << colorText();
+			return false;
+		}
+		++order; ++attribute;
+	}
+	if (order != attrOrder.end() || attribute != attributes.end())
+	{
+		std::cout << colorText(31) << "\nWrong amount of arguments, expected: " << attrOrder.size() << ", provided: " << (attributes.size() - 1) 
+				  << " to call of " << func->getName() << "() at " << node->getFirstChild()->getPosition() << colorText();
+		return false;
+	}
+	return true;
+}
+
 std::string Node::concatTypes()
 {
 	if (this->getChilds().empty())

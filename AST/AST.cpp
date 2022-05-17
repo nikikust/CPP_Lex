@@ -1,9 +1,10 @@
 #include <iostream>
 
 #include "AST.h"
+#include "../profile.h"
 
-//#define _DEBUG
-
+//#define ___DEBUG
+//#define _output
 
 AST::AST()
 {
@@ -12,11 +13,32 @@ AST::AST()
 	cursor = root;
 	root->nextNamespace();
 }
+AST::~AST()
+{
+	root->clearMemory();
+	root = nullptr;
+	local_root = nullptr;
+	local_roots.clear();
+	cursor = nullptr;
+}
+
+std::map<size_t, std::shared_ptr<CoinTable>>& AST::getVariables()
+{
+	return root->getVariables();
+}
+FunctionTable& AST::getFunctions()
+{
+	return root->getFunctions();
+}
+ClassTable& AST::getClasses()
+{
+	return root->getClasses();
+}
 
 void AST::ret()
 {
 	cursor = local_root;
-#ifdef _DEBUG
+#ifdef ___DEBUG
 	std::cout << "ret, changed to " << local_root->getValue() << "\n";
 
 	this->printTree();
@@ -28,7 +50,7 @@ void AST::goDown()
 	local_roots.push_back(local_root);
 	local_root = cursor;
 
-#ifdef _DEBUG
+#ifdef ___DEBUG
 	std::cout << "goDown, changed to " << local_root->getValue() << "\n";
 #endif
 }
@@ -59,7 +81,7 @@ bool AST::goUp()
 			cursor = local_root;
 		}
 
-#ifdef _DEBUG
+#ifdef ___DEBUG
 		std::cout << "goUp, changed to " << local_root->getValue() << "\n";
 
 		this->printTree();
@@ -71,14 +93,14 @@ bool AST::goUp()
 }
 void AST::checkForFull(std::shared_ptr<Token> next)
 {
-#ifdef _DEBUG
+#ifdef ___DEBUG
 	std::cout << "Check for full of " << cursor->getValue() << " : Next token is " << next->value << "\n";
 #endif
 	while (cursor->isFull() && 
 			(((cursor->getValue() == "if" || cursor->getValue() == "elif") && (cursor->getChilds().size() >= 3 || next->value != "elif" && next->value != "else")) ||
 			(cursor->getValue() != "if" && cursor->getValue() != "elif" && cursor->getType() == TokenType::SPECIAL)))
 	{
-#ifdef _DEBUG
+#ifdef ___DEBUG
 		std::cout << "Node " << cursor->getValue() << " is Full!!! Next token is " << next->value << "\n";
 #endif
 		goUp();
@@ -95,7 +117,7 @@ bool AST::addToken(Token& token, TokenType type)
 		return 1;
 	}
 
-#ifdef _DEBUG
+#ifdef ___DEBUG
 	std::cout << token.str() << " | " << getName(type) << " | Current: " << getName(cursor->getType()) << "\n";
 	std::cout << "Root vect:";
 	for (std::shared_ptr<Node> node : local_roots)
@@ -110,10 +132,11 @@ bool AST::addToken(Token& token, TokenType type)
 		{
 			if (cursor->getValue() == "." && token.value == "(")
 			{
-				std::cout << "\nTREE: Expected name instead of rounds!!!";
+				std::cout << colorText(31) << "\nTREE: Expected name instead of rounds!!!" << colorText();
 				return 0;
 			}
-			if ((cursor->getRang() == 2 || cursor->getRang() == 3) && (newNode->getRang() == 2 || newNode->getRang() == 3))
+
+			if (cursor->getRang() == 3 && newNode->getRang() == 3)
 			{
 				newNode->setParent(cursor);
 				if (cursor->getChilds().empty())
@@ -121,6 +144,7 @@ bool AST::addToken(Token& token, TokenType type)
 				else
 				{
 					newNode->addChild(cursor->getLastChild());
+					cursor->getLastChild()->setParent(newNode);
 					cursor = cursor->replaceLastChild(newNode);
 				}
 			}
@@ -136,12 +160,14 @@ bool AST::addToken(Token& token, TokenType type)
 
 				newNode->setParent(cursor->getParent());
 				newNode->addChild(cursor);
-				cursor = cursor->getParent()->replaceLastChild(newNode);
+				cursor->setParent(newNode);
+				cursor = newNode->getParent()->replaceLastChild(newNode);
 			}
 			else if (cursor->isFull())
 			{
 				newNode->setParent(cursor);
 				newNode->addChild(cursor->getLastChild());
+				cursor->getLastChild()->setParent(newNode);
 				cursor = cursor->replaceLastChild(newNode);
 			}
 			else
@@ -149,8 +175,15 @@ bool AST::addToken(Token& token, TokenType type)
 		}
 		else if ((type == TokenType::IDENTIFIER || type == TokenType::CONSTANT))
 		{
+			if (cursor->getValue() == "." && type == TokenType::CONSTANT)
+			{
+				std::cout << colorText(31) << "\nTREE: Expected name instead of constant!!!" << colorText();
+				return 0;
+			}
 			while (cursor->isFull())
 				cursor = cursor->getLastChild();
+
+			newNode->setParent(cursor);
 			cursor = cursor->addChild(newNode);
 		}
 		break;
@@ -162,6 +195,7 @@ bool AST::addToken(Token& token, TokenType type)
 			newNode->setParent(cursor);
 			newNode->addChild(cursor->getLastChild());
 			newNode->setType(TokenType::SPECIAL);
+			cursor->getLastChild()->setParent(newNode);
 			cursor = cursor->replaceLastChild(newNode);
 			goDown();
 			addNode();
@@ -173,7 +207,8 @@ bool AST::addToken(Token& token, TokenType type)
 				cursor = cursor->getParent();
 			newNode->addChild(cursor);
 			newNode->setParent(cursor->getParent());
-			cursor = cursor->getParent()->replaceLastChild(newNode);
+			cursor->setParent(newNode);
+			cursor = newNode->getParent()->replaceLastChild(newNode);
 
 			if (token.value == "(" || token.value == "[")
 				goDown();
@@ -197,7 +232,8 @@ bool AST::addToken(Token& token, TokenType type)
 
 			newNode->setParent(cursor->getParent());
 			newNode->addChild(cursor);
-			cursor = cursor->getParent()->replaceLastChild(newNode);
+			cursor->setParent(newNode);
+			cursor = newNode->getParent()->replaceLastChild(newNode);
 		}
 		else
 		{
@@ -207,7 +243,17 @@ bool AST::addToken(Token& token, TokenType type)
 		break;
 	case TokenType::SPECIAL:
 		if (token.value == "(")
-			goDown();
+		{
+			if (cursor->getValue() == "node" || cursor->getValue() == "{" ||
+				cursor->getValue() == "return")
+			{
+				addProbe();
+				goDown();
+				addProbe();
+			}
+			else
+				goDown();
+		}
 		else if (cursor->getValue() == "<")
 		{
 			cursor = cursor->addChild(newNode);
@@ -256,11 +302,15 @@ bool AST::addToken(Token& token, TokenType type)
 		if (token.value == "(")
 		{
 			goDown();
+			addProbe();
 		}
 		else
 		{
 			if (!cursor->isEmpty())
+			{
 				newNode->addChild(cursor->getLastChild());
+				newNode->getLastChild()->setParent(newNode);
+			}
 			newNode->setParent(cursor->getParent());
 			cursor = cursor->getParent()->replaceLastChild(newNode);
 			if (type == TokenType::TYPE)
@@ -269,7 +319,7 @@ bool AST::addToken(Token& token, TokenType type)
 		break;
 	}
 
-#ifdef _DEBUG
+#ifdef ___DEBUG
 	this->printTree();
 	std::cout << "\n---------------------------------------------------------\n";
 #endif
@@ -287,8 +337,15 @@ std::string AST::genRPN_str(bool full)
 }
 nodeVect AST::RPN()
 {
+	bool fixed = this->root->fixLinks(root);
 	auto out = this->root->RPN(root, 0, true);
 	this->rpn_ok = root->getState();
+	if (fixed)
+		std::cout << colorText(31) << "\n----------------------\nFIXED LINKS IN TREE!!!\n----------------------\n" << colorText();
+#ifdef _output
+	else
+		std::cout << colorText(32) << "\n-------------------------\nNO FIXED LINKS IN TREE!!!\n-------------------------\n" << colorText();
+#endif
 	return out;
 }
 
@@ -299,4 +356,8 @@ void AST::showVars()
 void AST::showFunctions()
 {
 	this->root->showFunctions();
+}
+void AST::showClasses()
+{
+	this->root->showClasses();
 }

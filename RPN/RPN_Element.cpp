@@ -21,3 +21,16 @@ size_t RPN_Element::getJumper()
 {
 	return this->jumper;
 }
+
+
+
+void to_json(json& j, const RPN_Element& p)
+{
+	j = json{ 
+		{"value", p.value},
+		{"line", p.line},
+		{"position", p.position},
+		{"type", p.type},
+		{"jumper", p.jumper}
+	};
+}

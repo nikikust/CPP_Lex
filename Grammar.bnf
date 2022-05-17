@@ -8,7 +8,7 @@ statement	:-	block
 			|	jump_statements
 			|	return_statement
 			|	arifmetic_expression_list
-			|	// SEMICOLON
+			|	SEMICOLON
 			;
 
 full_variable_declaration	:-	type_specification variable_declaration?
@@ -54,7 +54,6 @@ attributes_list	:-	type_specification (COMMA type_specification)*
 variable_declaration	:-	(STRONG_ASSIGN_OP arifmetic_expression)? extended_declaration*
 						;
 
-.....................................................................................................................................................
 extended_declaration	:-	COMMA IDENTIFIER (STRONG_ASSIGN_OP arifmetic_expression)?
 						;
 
@@ -95,24 +94,22 @@ arifmetic_expression	:-	unary_expression (BINAR_OP arifmetic_expression)?
 
 unary_expression	:-	OP_UNAR_PREF unary_expression
 					|	OP_UNAR_BINAR unary_expression
-					|	postfix_expression postfix_operations*
+					|	postfix_expression OP_UNAR_POST*
 					;
 
 postfix_expression	:-	literal
 					|	L_RND arifmetic_expression R_RND
 					;
 
-postfix_operations	:-	L_RND arifmetic_expression_list? R_RND
-					|	L_SQR arifmetic_expression R_SQR
-					|	OP_UNAR_POST
-					;
-
-literal	:-	IDENTIFIER
+literal	:-	IDENTIFIER call*
 		|	STRING
 		|	INT
 		|	FLOAT
 		;
 
+call	:-	L_RND arifmetic_expression_list? R_RND
+		|	L_SQR arifmetic_expression R_SQR
+		;
 
 
 

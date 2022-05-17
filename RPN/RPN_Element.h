@@ -3,6 +3,8 @@
 #include <vector>
 #include <memory>
 
+#include "../Memory/InitJSON.h"
+
 class RPN_Element;
 typedef std::vector<std::shared_ptr<RPN_Element>> RPNVect;
 
@@ -41,5 +43,7 @@ public:
 	size_t getPosition();
 	TokenType getType();
 	size_t getJumper();
+
+	friend void to_json(json&, const RPN_Element&);
 };
 

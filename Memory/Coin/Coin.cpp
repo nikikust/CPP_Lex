@@ -17,3 +17,7 @@ void Coin::setName(std::string name)
 {
 	this->name = name;
 }
+void Coin::setConst(bool Const)
+{
+	this->Const = Const;
+}

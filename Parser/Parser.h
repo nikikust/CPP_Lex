@@ -21,12 +21,16 @@ class Parser
 
 public:
 	Parser();
+	~Parser();
 
 	void printTree(bool newView = true);
 	void printRPN(bool full = false);
 	bool formRPN();
 	void showVars();
 	void showFunctions();
+	void showClasses();
+
+	void saveData();
 
 	bool checkToken(bool x, std::string type, bool moveIter = true);
 	bool breakCode(std::string message = "");
@@ -58,6 +62,9 @@ public:
 	bool cycle_statement();
 	bool for_condition_expr();
 
+	bool print_expr();
+	bool input_expr();
+
 	bool selection_statement();
 
 	bool after_keyword();
@@ -69,9 +76,9 @@ public:
 	bool arifmetic_expression();
 	bool unary_expression();
 	bool postfix_expression();
-	bool postfix_operations();
 
 	bool literal();
+	bool call();
 
 	bool block();
 	bool array_declatation_part();

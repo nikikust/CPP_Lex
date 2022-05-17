@@ -5,7 +5,7 @@
 #include "Lexer.h"
 #include "../profile.h"
 
-constexpr bool USE_COLORS = 1;
+constexpr bool USE_COLORS = 0;
 
 
 static boost::regex REGEX_3000(
@@ -20,7 +20,7 @@ static boost::regex REGEX_3000(
 ([^\\s]+)"
 );
 
-static std::string Keywords("|for|while|if|else|elif|continue|break|return|this|class|");
+static std::string Keywords("|for|while|if|else|elif|continue|break|return|this|class|print|input|");
 static std::string SimpleTypes("|int|double|bool|string|void|");
 static std::string TemplatedTypes("|ptr|list|map|");
 
@@ -88,7 +88,7 @@ int getTokens(tokenVect& Tokens, std::string fileName)
 					else if (TemplatedTypes.find("|" + match.str(i) + "|") != std::string::npos)
 						Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::TEMPLATEDTYPE, match.str(i), curent_line, pos)));
 					else if (match.str(i) == "true" || match.str(i) == "false")
-						Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::BOOL, match.str(i), curent_line, pos)));
+						Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::BOOL, (match.str(i) == "true")? "1" : "0", curent_line, pos)));
 					else
 						Tokens.push_back(std::move(std::make_shared<Token>(static_cast<TokensEnum>(i), match.str(i), curent_line, pos)));
 				}

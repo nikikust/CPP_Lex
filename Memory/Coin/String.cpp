@@ -7,7 +7,7 @@ std::string String::getType()
 }
 std::string String::str()
 {
-	return "string " + name + " = \"" + data + "\"";
+	return  ((Const) ? "const string " : "string ") + name + " = " + data;
 }
 
 void String::set(std::string new_data)
@@ -17,4 +17,22 @@ void String::set(std::string new_data)
 std::string String::get()
 {
 	return data;
+}
+
+json String::to_json_edt()
+{
+	json j =
+	{
+		{"CoinType", type},
+		{"name", name},
+		{"ID", ID},
+		{"Const", Const},
+		{"data", 
+			{
+				{"data", data}
+			}
+		}
+	};
+
+	return j;
 }
