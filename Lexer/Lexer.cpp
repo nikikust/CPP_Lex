@@ -5,7 +5,7 @@
 #include "Lexer.h"
 #include "../profile.h"
 
-constexpr bool USE_COLORS = 0;
+constexpr bool USE_COLORS = 1;
 
 
 static boost::regex REGEX_3000(
@@ -20,7 +20,7 @@ static boost::regex REGEX_3000(
 ([^\\s]+)"
 );
 
-static std::string Keywords("|for|while|if|else|elif|continue|break|return|this|class|print|input|");
+static std::string Keywords("|for|while|if|else|elif|continue|break|return|this|class|print|input|exit|");
 static std::string SimpleTypes("|int|double|bool|string|void|");
 static std::string TemplatedTypes("|ptr|list|map|");
 
@@ -54,7 +54,7 @@ int getTokens(tokenVect& Tokens, std::string fileName)
 	boost::smatch match;
 	for (boost::sregex_iterator it = boost::sregex_iterator(data.begin(), data.end(), REGEX_3000); it != boost::sregex_iterator(); it++) {
 		match = *it;
-		if (!match.str(match.size() - 1).empty())
+		if (!match.str((int)match.size() - 1).empty())
 		{
 			std::cout << colorText(31) << "Unknown lexem at (" << curent_line << ", " << ((match.position() ? match.position() : 2) - curent_line_pos) << "): '" << match.str() << "'" << colorText() << std::endl;
 			Tokens.clear();
@@ -115,6 +115,19 @@ int getTokens(tokenVect& Tokens, std::string fileName)
 	Tokens.push_back(std::move(std::make_shared<Token>(TokensEnum::_EOF, "EOF", curent_line, pos)));
 	return 1;
 }
+
+void findAndReplaceAll(std::string& data, std::string toSearch, std::string replaceStr)
+{
+	size_t pos = data.find(toSearch);
+
+	while (pos != std::string::npos)
+	{
+		data.replace(pos, toSearch.size(), replaceStr);
+		pos = data.find(toSearch, pos + replaceStr.size());
+	}
+}
+
+
 
 std::string colorText(int color, int background) // black, red, green, yellow, blue, purple, lightblue, white; 
 {

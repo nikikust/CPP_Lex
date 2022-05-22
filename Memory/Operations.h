@@ -98,7 +98,12 @@ static std::unordered_map<std::string,	// choose 1st operand type
 					{ "bool", "string" }
 				}
 			},
-			{ "binar_op__bool",
+			{ "==",
+				{
+					{ "string", "bool" }
+				}
+			},
+			{ "!=",
 				{
 					{ "string", "bool" }
 				}

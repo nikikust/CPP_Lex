@@ -28,13 +28,21 @@ void Parser::printRPN(bool full)
 	size_t cnt = 0;
 	while (it != RPN.end())
 	{
-		auto node = *it;
+		auto& node = *it;
 
 		std::cout << "\n(" << cnt << "): ";
 		if (node->getType() == TokenType::JMP || node->getType() == TokenType::CJM)
 			std::cout << node->getValue() << "(" << node->getJumper() << ": " << RPN.at(node->getJumper())->getValue() << ")";
 		else if (node->getType() == TokenType::DESTRUCTOR)
 			std::cout << "~" << node->getValue();
+		else if (node->getType() == TokenType::TYPE)
+			std::cout << node->getValue() << "( " << node->getSubValue() << " )";
+		else if (node->getValue() == ".")
+			std::cout << "." << node->getSubValue();
+		else if (node->getValue() == ".(")
+			std::cout << "." << node->getSubValue() << "()";
+		else if (node->getValue() == "(")
+			std::cout << node->getSubValue() << "()";
 		else
 			std::cout << node->getValue();
 
@@ -48,7 +56,7 @@ bool Parser::formRPN()
 	if (tree.rpn_ok)
 		for (auto& obj : out)
 			this->RPN.push_back(std::make_shared<RPN_Element>(
-				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper()));
+				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper(), obj->getSubValue()));
 	return tree.rpn_ok;
 }
 void Parser::showVars()
@@ -78,7 +86,7 @@ void Parser::saveData()
 	RPN_JSON = RPN;
 	FUNCTIONS_JSON = tree.getFunctions();
 	CLASSES_JSON = tree.getClasses();
-	VARIABLES_JSON = tree.getVariables();
+	VARIABLES_JSON = *(tree.getVariables()[1]);
 
 	std::ofstream fout1("output\\RPN.json");
 	fout1 << RPN_JSON;
@@ -100,7 +108,7 @@ void Parser::saveData()
 	ALL["RPN"] = RPN;
 	ALL["Functions"] = tree.getFunctions();
 	ALL["Classes"] = tree.getClasses();
-	ALL["Variables"] = tree.getVariables();
+	ALL["Variables"] = *(tree.getVariables()[1]);
 
 	std::vector<std::uint8_t> v_ubjson = json::to_ubjson(ALL);
 
@@ -170,6 +178,7 @@ bool Parser::statement()
 			|| print_expr()
 			|| input_expr()
 			|| SEMICOLON()
+			|| EXIT()
 		    || _EOF()
 		     );
 	
@@ -578,7 +587,10 @@ bool Parser::STRING()
 {
 	bool x = checkToken((*TokenIterator)->type == TokensEnum::STRING, "STRING");
 	if (x)
+	{
+		parseString(last_token.value);
 		return tree.addToken(last_token, TokenType::CONSTANT);
+	}
 	return x;
 }
 bool Parser::INT()
@@ -747,6 +759,18 @@ bool Parser::CLASS()
 		return tree.addToken(last_token, TokenType::SPECIAL);
 	return x;
 }
+bool Parser::EXIT()
+{
+	bool x = checkToken((*TokenIterator)->value == "exit", "EXIT");
+	if (x)
+	{
+		bool y = tree.addToken(last_token, TokenType::SPECIAL);
+		if (y)
+			tree.goUp();
+		return y;
+	}
+	return x;
+}
 
 bool Parser::SIMPLE_TYPE()
 {
@@ -871,4 +895,13 @@ bool Parser::_EOF()
 	if (x)
 		return tree.addToken(last_token, TokenType::_EOF);
 	return x;
+}
+
+void parseString(std::string& str)
+{
+	str = str.substr(1, str.size() - 2);
+	findAndReplaceAll(str, "\\n", "\n");
+	findAndReplaceAll(str, "\\t", "\t");
+	findAndReplaceAll(str, "\\\"", "\"");
+	findAndReplaceAll(str, "\\", "");
 }

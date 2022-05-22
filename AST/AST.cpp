@@ -150,6 +150,16 @@ bool AST::addToken(Token& token, TokenType type)
 			}
 			else if (token.value == "(")
 			{
+				if (cursor->getValue() == "(")
+				{
+					ret();
+					if (cursor->getType() == TokenType::SPECIAL && (
+						cursor->getValue() == "node" || cursor->getValue() == "{" ||
+						cursor->getValue() == "return") )
+					{
+						addProbe();
+					}
+				}
 				goDown();
 				addProbe();
 			} 
@@ -211,7 +221,10 @@ bool AST::addToken(Token& token, TokenType type)
 			cursor = newNode->getParent()->replaceLastChild(newNode);
 
 			if (token.value == "(" || token.value == "[")
+			{
 				goDown();
+				addProbe();
+			}
 		}
 		else
 		{
@@ -248,6 +261,11 @@ bool AST::addToken(Token& token, TokenType type)
 				cursor->getValue() == "return")
 			{
 				addProbe();
+				goDown();
+				addProbe();
+			}
+			else if (cursor == local_root)
+			{
 				goDown();
 				addProbe();
 			}
@@ -337,8 +355,15 @@ std::string AST::genRPN_str(bool full)
 }
 nodeVect AST::RPN()
 {
+	root->clearProbes(root);
 	bool fixed = this->root->fixLinks(root);
+
+	this->root->nextNamespace();
 	auto out = this->root->RPN(root, 0, true);
+	this->root->previousNamespace();
+
+	this->root->clearVarAllocs();
+
 	this->rpn_ok = root->getState();
 	if (fixed)
 		std::cout << colorText(31) << "\n----------------------\nFIXED LINKS IN TREE!!!\n----------------------\n" << colorText();

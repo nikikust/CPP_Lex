@@ -3,7 +3,20 @@
 
 void Numeric::set(double new_data)
 {
-	this->data = new_data;
+	switch (numericType)
+	{
+	case NumType::INT:
+		this->data = (int)new_data;
+		break;
+	case NumType::DOUBLE:
+		this->data = new_data;
+		break;
+	case NumType::BOOL:
+		this->data = (bool)new_data;
+		break;
+	default:
+		this->data = new_data;
+	}
 }
 
 std::string Numeric::getType()
@@ -50,6 +63,13 @@ json Numeric::to_json_edt()
 			}
 		}
 	};
-
 	return j;
+}
+
+std::shared_ptr<Coin> Numeric::clone()
+{
+	Numeric res(name, numericType, Const);
+	res.data = data;
+
+	return std::make_shared<Numeric>(res);
 }

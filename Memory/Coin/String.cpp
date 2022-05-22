@@ -7,7 +7,7 @@ std::string String::getType()
 }
 std::string String::str()
 {
-	return  ((Const) ? "const string " : "string ") + name + " = " + data;
+	return  ((Const) ? "const string " : "string ") + name + " = \"" + data + "\"";
 }
 
 void String::set(std::string new_data)
@@ -35,4 +35,12 @@ json String::to_json_edt()
 	};
 
 	return j;
+}
+
+std::shared_ptr<Coin> String::clone()
+{
+	String res(name, Const);
+	res.data = data;
+
+	return std::make_shared<String>(res);
 }

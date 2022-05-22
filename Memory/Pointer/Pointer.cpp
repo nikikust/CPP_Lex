@@ -32,8 +32,6 @@ std::shared_ptr<Coin> Pointer::get()
 
 json Pointer::to_json_edt()
 {
-	json buf;
-	to_json_edt2(buf, data);
 	json j =
 	{
 		{"CoinType", type},
@@ -42,7 +40,6 @@ json Pointer::to_json_edt()
 		{"Const", Const},
 		{"data",
 			{
-				{"data", buf},
 				{"storingType", storingType}
 			}
 		}
@@ -50,3 +47,11 @@ json Pointer::to_json_edt()
 
 	return j;
 }
+
+std::shared_ptr<Coin> Pointer::clone()
+{
+	Pointer res(name, storingType, Const);
+
+	return std::make_shared<Pointer>(res);
+}
+

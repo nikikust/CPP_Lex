@@ -2,11 +2,13 @@
 
 #include "Lexer/Lexer.h"
 #include "Parser/Parser.h"
+#include "Interpreter/Interpreter.h"
 
 #include "profile.h"
 
 #define _counters
 //#define _output
+
 
 int main(int argc, char* argv[])
 {
@@ -31,7 +33,6 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 	}
-
 
 	std::vector<std::shared_ptr<Token>> Tokens;
 	{
@@ -119,13 +120,33 @@ int main(int argc, char* argv[])
 	}
 
 	if (parse_result && RPN_result)
-		std::cout << "\n\n" << colorText(32) << "Code generated successfuly!" << colorText();
+	{
+		std::cout << "\n\n" << colorText(32) << "Code generated successfuly!\n\n" << colorText();
+
+		std::cout << "--- Interpreter ---\n";
+
+		Interpreter interpreter;
+
+		std::cout << "\nReady to start, send any key: "; std::string PressAnyKey;
+		std::cin >> PressAnyKey; // Press Any Key :)
+		std::cin.ignore();
+		std::cout << std::string("\n") * 50;
+
+		std::cout << colorText(36) << "\n--- !!! RUN !!! ---\n" << colorText();
+		{
+#ifdef _counters
+			auto a = LogDuration("\n\n-----\nIntrepret time: ", true);
+#endif
+			interpreter.run();
+		}
+	}
 	else
-		std::cout << "\n\n" << colorText(31) << "Code generation is failed!" << colorText();
+		std::cout << "\n\n" << colorText(31) << "Code generation is failed!\n\n" << colorText();
 
 
-	std::cout << "\n\nSend any key: "; int PressAnyKey;
+	std::cout << "\n\nSend any key: "; std::string PressAnyKey;
 	std::cin >> PressAnyKey; // Press Any Key :)
+	std::cin.ignore();
 
 	return 0; 
 }

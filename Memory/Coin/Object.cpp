@@ -6,6 +6,12 @@ Object::~Object()
 	fields = nullptr;
 }
 
+void Object::upgradeToFull(std::shared_ptr<Class> objClass)
+{
+	this->objClass = objClass;
+	this->methods = objClass->getMethods();
+}
+
 std::string Object::getType()
 {
 	return this->objClass.lock()->getName();
@@ -23,7 +29,10 @@ std::shared_ptr<FunctionTable> Object::getMethods()
 {
 	return this->methods.lock();
 }
-
+std::string Object::getDelayedClass()
+{
+	return className;
+}
 
 json Object::to_json_edt()
 {

@@ -63,6 +63,10 @@ void Node::setTokenType(TokensEnum type)
 {
 	this->token.type = type;
 }
+void Node::setSubValue(std::string value)
+{
+	this->sub_value = value;
+}
 
 nodeVect& Node::getChilds()
 {
@@ -103,6 +107,10 @@ bool Node::getState()
 std::string Node::getPosition()
 {
 	return "(" + std::to_string(this->token.line) + ", " + std::to_string(this->token.position) + ")";
+}
+std::string Node::getSubValue()
+{
+	return this->sub_value;
 }
 
 int Node::getRang()
@@ -194,7 +202,7 @@ bool Node::isFull()
 			return amount >= 3;
 		else if (val == "else" || val == "print" || val == "input" || val == "return")
 			return amount >= 1;
-		else if (val == "break" || val == "continue")
+		else if (val == "break" || val == "continue" || val == "exit")
 			return 1;
 		else
 			return 0;
@@ -215,8 +223,11 @@ bool Node::isFull()
 
 std::string Node::str(std::shared_ptr<Node> me, std::shared_ptr<Node> local_root, std::shared_ptr<Node> cursor, bool newView, std::string offset_string, bool is_last)
 {
-	std::string buf = offset_string + ((is_last && newView) ? " `- " : "`- ") + this->getValue() + " " + this->getPosition() +
-					  " : " + getName(this->getType());
+	std::string buf = offset_string + ((is_last && newView) ? " `- " : "`- ") +
+					  ((this->getType() == TokenType::CONSTANT && this->getToken().type == TokensEnum::STRING) ? "\"" : "") +
+					  this->getValue() +
+					  ((this->getType() == TokenType::CONSTANT && this->getToken().type == TokensEnum::STRING) ? "\"" : "") +
+					  " " + this->getPosition() + " : " + getName(this->getType());
 	if (me == local_root)
 		buf += " <- local root";
 	if (me == cursor)
@@ -228,7 +239,7 @@ std::string Node::str(std::shared_ptr<Node> me, std::shared_ptr<Node> local_root
 	while (it != this->getChilds().end())
 	{
 		buf += (*it)->str(*it, local_root, cursor, newView, offset_string + ((it == this->getChilds().end() - 1 && newView)? "\t" : "\t|"), it == this->getChilds().end() - 1);
-		it++;
+		++it;
 	}
 	return buf;
 }
@@ -249,6 +260,33 @@ bool Node::fixLinks(std::shared_ptr<Node> me)
 		++it;
 	}
 	return fixed;
+}
+void Node::clearProbes(std::shared_ptr<Node> me)
+{
+	nodeVect::iterator it = childs.begin();
+	std::vector<std::shared_ptr<Node>> out;
+
+	while (it != childs.end())
+	{
+		if ((*it)->getType() == TokenType::PROBE)
+		{
+			if (!(*it)->isEmpty())
+			{
+				std::shared_ptr<Node> buf = (*it)->getFirstChild();
+				buf->setParent(me);
+				buf->clearProbes(buf);
+				out.push_back(buf);
+				(*it)->childs.clear();
+			}
+		}
+		else
+		{
+			(*it)->clearProbes(*it);
+			out.push_back(*it);
+		}
+		++it;
+	}
+	childs = out;
 }
 std::string Node::RPN_str(bool full)
 {
@@ -326,12 +364,30 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			nodeVect out = (*it)->RPN(*it, current_size);
 			current_size += out.size();
 			output.insert(output.cend(), out.begin(), out.end());
-			it++;
+			++it;
 		}
-		nodeVect out = (*buf)->RPN(*buf, current_size);
-		current_size += out.size();
-		output.insert(output.cend(), out.begin(), out.end());
-		output.push_back(me);
+
+		if ((*buf)->getValue() == ".")
+		{
+			nodeVect out = (*buf)->getFirstChild()->RPN((*buf)->getFirstChild(), current_size);
+			output.insert(output.cend(), out.begin(), out.end());
+			current_size += out.size();
+
+			auto me2 = *this;
+			me2.setName(".(");
+			me2.setSubValue((*buf)->getLastChild()->getValue());
+
+			output.push_back(std::make_shared<Node>(me2));
+			current_size += 1;
+		}
+		else
+		{
+			auto me2 = *this;
+			me2.setSubValue((*buf)->getValue());
+
+			output.push_back(std::make_shared<Node>(me2));
+			current_size += 1;
+		}
 	}
 	else if (this->getValue() == "if" || this->getValue() == "elif")
 	{
@@ -346,8 +402,8 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 		current_size += 1;
 
-		bool cleanIt = (*it)->getValue() == "{" ||
-					   (*it)->getValue() == "node" || 
+		bool cleanIt = (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "{" ||
+					   (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "node" || 
 					   (*it)->getType() == TokenType::PROBE ||
 					   (*it)->getType() == TokenType::TYPE;
 
@@ -398,8 +454,8 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		auto getFromCycle = output.size() - 1;
 		current_size += 1;
 
-		bool cleanIt = (*it)->getValue() == "{" ||
-					   (*it)->getValue() == "node" ||
+		bool cleanIt = (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "{" ||
+					   (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "node" ||
 					   (*it)->getType() == TokenType::PROBE ||
 					   (*it)->getType() == TokenType::TYPE;
 
@@ -460,8 +516,8 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		}
 
 		++it;
-		bool cleanIt = (*it)->getValue() == "{" ||
-					   (*it)->getValue() == "node" ||
+		bool cleanIt = (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "{" ||
+					   (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "node" ||
 					   (*it)->getType() == TokenType::PROBE ||
 					   (*it)->getType() == TokenType::TYPE;
 		
@@ -567,20 +623,43 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			return {};
 		}
 
-		std::string val = this->getFirstChild()->getOpType();
-		if (val != functionDeclaration && !areNumerics(val, functionDeclaration))
+		if (functionDeclaration != "void")
 		{
-			std::cout << colorText(31) << "ERR: function returns '" << functionDeclaration << "', provided '" << val << "'" << colorText() << "\n";
-			breakCode();
-			return {};
+			if (this->getChilds().empty())
+			{
+				std::cout << colorText(31) << "ERR: function must return '" << functionDeclaration << "' at " << this->token.str() << colorText() << "\n";
+				breakCode();
+				return {};
+			}
+
+			std::string val = this->getFirstChild()->getOpType();
+			if (val != functionDeclaration && !areNumerics(val, functionDeclaration))
+			{
+				std::cout << colorText(31) << "ERR: function returns '" << functionDeclaration << "', provided '" << val << "'" << colorText() << "\n";
+				breakCode();
+				return {};
+			}
+
+			nodeVect out = this->getFirstChild()->RPN(this->getFirstChild(), current_size);
+			output.insert(output.cend(), out.begin(), out.end());
+			current_size += out.size();
+
+			output.push_back(me);
+			current_size += 1;
 		}
-
-		nodeVect out = this->getFirstChild()->RPN(this->getFirstChild(), current_size);
-		output.insert(output.cend(), out.begin(), out.end());
-		current_size += out.size();
-
-		output.push_back(me);
-		current_size += 1;
+		else
+		{
+			if (!this->getChilds().empty())
+			{
+				std::cout << colorText(31) << "ERR: function doesn't return values, after " << this->token.str() << colorText() << "\n";
+				breakCode();
+				return {};
+			}
+			auto me2 = *this;
+			me2.setName("return_void");
+			output.push_back(std::make_shared<Node>(me2));
+			current_size += 1;
+		}
 
 		nodeVect destr;
 		auto it2 = variables.rbegin();
@@ -604,7 +683,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	{
 		if (this->getChilds().empty())
 		{
-			auto newNode = std::make_shared<Node>(Token(TokensEnum::STRING, "\"\"", 0, 0), TokenType::CONSTANT, me);
+			auto newNode = std::make_shared<Node>(Token(TokensEnum::STRING, "", 0, 0), TokenType::CONSTANT, me);
 			addConstant(newNode);
 
 			output.push_back(newNode);
@@ -668,30 +747,46 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 		++it;
 
-		auto body = *it;
+		auto& body = *it;
 
 		nodeVect::iterator it2 = body->childs.begin();
 		nodeVect fieldsVect;
 		while (it2 != body->childs.end())
 		{
-			if ((*it2)->getType() == TokenType::TYPE)
+			if ((*it2)->getType() == TokenType::TYPE)	// FIELDS
 			{
-				auto field = (*it2)->RPN(*it2, current_size);
+				auto field = (*it2)->RPN(*it2, 0);
 				fieldsVect.insert(fieldsVect.cend(), field.begin(), field.end());
-				current_size += field.size();
+				//current_size += field.size();
 			}
 			++it2;
 		}
 		CoinTable fields = *variables[currentNamespace];
 		
-		classes.putClass(classDeclaration, std::make_shared<CoinTable>(fields), std::make_shared<FunctionTable>());
+		RPNVect fieldsRPN;
+		for (auto& obj : fieldsVect)
+			fieldsRPN.push_back(std::make_shared<RPN_Element>(
+				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper(), obj->getSubValue()));
+
+		classes.putClass(classDeclaration, std::make_shared<CoinTable>(fields), 
+						 std::make_shared<RPNVect>(fieldsRPN), std::make_shared<FunctionTable>());
 
 		it2 = body->childs.begin();
 		while (it2 != body->childs.end())
 		{
-			if ((*it2)->getType() == TokenType::SPECIAL)
+			if ((*it2)->getType() == TokenType::SPECIAL)	// METHODS
 				(*it2)->RPN(*it2, current_size);
 			++it2;
+		}
+
+		for (auto& obj : classes.getClass(classDeclaration)->getFields()->getTable())
+		{
+			if (obj.second->getCoinType() == CoinType::OBJECT)
+			{
+				std::shared_ptr<Object> object = std::dynamic_pointer_cast<Object, Coin>(obj.second);
+				if (object->getDelayedClass() == classDeclaration)
+					object->upgradeToFull(classes.getClass(classDeclaration));
+			}
 		}
 
 		classDeclaration = "";
@@ -728,8 +823,8 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		*/
 
 		nodeVect typeAndName = (*it)->RPN(*it, current_size);
-		std::string functionName = typeAndName.front()->getValue();
-		std::string functionReturnType = typeAndName.back()->getValue();
+		std::string functionName = typeAndName.front()->getSubValue();
+		std::string functionReturnType = typeAndName.front()->getValue();
 
 		functionDeclaration = functionReturnType;
 
@@ -752,11 +847,19 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		nextNamespace();
 		functionNamespace = currentNamespace;
 		nodeVect attributesVect = (*it)->RPN(*it, current_size);
+		RPNVect attributesRPN;
+		for (auto obj : attributesVect)
+			attributesRPN.push_back(std::make_shared<RPN_Element>(
+				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper(), obj->getSubValue()));
+
 		std::vector<std::string> order;
+		std::vector<std::string> orderNames;
 
 		for (auto& attr : this->childs[1]->childs)
+		{
 			order.push_back(attr->getValue());
-
+			orderNames.push_back(attr->getLastChild()->getValue());
+		}
 		CoinTable attributes = *variables[currentNamespace];
 
 		++it;
@@ -768,7 +871,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		RPNVect bodyRPN;
 		for (auto obj : body)
 			bodyRPN.push_back(std::make_shared<RPN_Element>(
-				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper()));
+				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper(), obj->getSubValue()));
 
 		if (!functionReturnType.starts_with("ptr<"))
 			getCoin(functionName)->setConst(true);
@@ -784,23 +887,30 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 		if (classDeclaration != "")
 			classes.getClass(classDeclaration)->getMethods()->putFunction(
-				functionName, std::make_shared<CoinTable>(attributes), order, getCoin(functionName), std::make_shared<RPNVect>(bodyRPN));
+				functionName, std::make_shared<CoinTable>(attributes), order, orderNames,
+				std::make_shared<RPNVect>(attributesRPN), getCoin(functionName), std::make_shared<RPNVect>(bodyRPN));
 		else
 			functions.putFunction(
-				functionName, std::make_shared<CoinTable>(attributes), order, getCoin(functionName), std::make_shared<RPNVect>(bodyRPN));
+				functionName, std::make_shared<CoinTable>(attributes), order, orderNames,
+				std::make_shared<RPNVect>(attributesRPN), getCoin(functionName), std::make_shared<RPNVect>(bodyRPN));
 
 		previousNamespace();
 
 		functionDeclaration = "";
 		previousNamespace();
 	}
+	else if (this->getValue() == "exit") 
+	{
+		output.push_back(me);
+		current_size += 1;
+	}
 	else if (this->getType() == TokenType::PROBE)
 	{
 		if (!this->isEmpty())
 		{
-			bool cleanIt = (*it)->getValue() == "{" ||
-						   (*it)->getValue() == "else" ||
-						   (*it)->getValue() == "node" ||
+			bool cleanIt = (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "{" ||
+						   (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "else" ||
+						   (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "node" ||
 						   (*it)->getType() == TokenType::PROBE ||
 						   (*it)->getType() == TokenType::TYPE;
 			output = this->getLastChild()->RPN(*it, current_size, clean && cleanIt);
@@ -831,9 +941,12 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 					breakCode();
 					return {};
 				}
-
-				output.push_back((*it)->getFirstChild());
-				output.push_back(me);
+				auto me2 = *this;
+				if (this->getToken().type == TokensEnum::TEMPLATEDTYPE)
+					me2.setName("ptr<" + this->getFirstChild()->concatTypes() + ">");
+				me2.setSubValue((*it)->getFirstChild()->getValue());
+				output.push_back(std::make_shared<Node>(me2));
+				current_size += 1;
 
 				if (this->getValue() == "int")
 					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), NumType::INT);
@@ -842,23 +955,33 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 				else if (this->getValue() == "bool")
 					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), NumType::BOOL);
 				else if (this->getValue() == "ptr")
+				{
 					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), this->getFirstChild()->concatTypes());
+					auto res = this->getFirstChild()->allocate(1);
+					if (res.size() != 1)
+					{
+						breakCode();
+						return {};
+					}
+
+					std::dynamic_pointer_cast<Pointer, Coin>(getCoin((*it)->getFirstChild()->getValue()))->set(res[0]);
+				}
 				else if (this->getValue() == "string")
 					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue());
 				else if (classes.classExists(this->getValue()))
 				{
-					CoinTable newFields = *classes.getClass(this->getValue())->getFields();
+					std::shared_ptr<CoinTable> newFields = classes.getClass(this->getValue())->getFields()->clone();
 					variables[currentNamespace]->putCoin(
-						(*it)->getFirstChild()->getValue(), classes.getClass(this->getValue()), std::make_shared<CoinTable>(newFields));
+						(*it)->getFirstChild()->getValue(), classes.getClass(this->getValue()), newFields);
 				}
+				else if (this->getValue() == "void")
+					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), true, true);
 				else
 				{
 					std::cout << colorText(31) << "ERR: unknown variable type. " << this->token.str() << colorText() << "\n";
 					breakCode();
 					return {};
 				}
-
-				current_size += 2;
 
 				nodeVect out = (*it)->RPN(*it, current_size);
 				current_size += out.size();
@@ -875,8 +998,13 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 					breakCode();
 					return {};
 				}
-				output.push_back(*it);
-				output.push_back(me);
+				
+				auto me2 = *this;
+				if (this->getToken().type == TokensEnum::TEMPLATEDTYPE)
+					me2.setName("ptr<" + this->getFirstChild()->concatTypes() + ">");
+				me2.setSubValue((*it)->getValue());
+				output.push_back(std::make_shared<Node>(me2));
+				current_size += 1;
 
 				if (this->getValue() == "int")
 					variables[currentNamespace]->putCoin((*it)->getValue(), NumType::INT);
@@ -890,6 +1018,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 					auto res = this->getFirstChild()->allocate(1);
 					if (res.size() != 1)
 					{
+						std::cout << "ERR: wrong amount of arguments for ptr: " << res.size() << " instead of 1\n";
 						breakCode();
 						return {};
 					}
@@ -900,24 +1029,41 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 					variables[currentNamespace]->putCoin((*it)->getValue());
 				else if (classes.classExists(this->getValue()))
 				{
-					CoinTable newFields = *classes.getClass(this->getValue())->getFields();
+					std::shared_ptr<CoinTable> newFields = classes.getClass(this->getValue())->getFields()->clone();
 					variables[currentNamespace]->putCoin(
-						(*it)->getValue(), classes.getClass(this->getValue()), std::make_shared<CoinTable>(newFields));
+						(*it)->getValue(), classes.getClass(this->getValue()), newFields);
 				}
+				else if (this->getValue() == "void")
+					variables[currentNamespace]->putCoin((*it)->getValue(), true, true);
 				else
 				{
 					std::cout << colorText(31) << "ERR: unknown variable type. " << this->token.str() << colorText() << "\n";
 					breakCode();
 					return {};
 				}
-
-				current_size += 2;
 			}
 			++it;
 		}
 
 		if (this->getToken().type == TokensEnum::TEMPLATEDTYPE)
 			this->setName(this->getValue() + "<" + this->getFirstChild()->concatTypes() + ">");
+	}
+	else if (this->getValue() == ".")
+	{
+		nodeVect out = (*it)->RPN(*it, current_size);
+		output.insert(output.cend(), out.begin(), out.end());
+		current_size += out.size();
+		++it;
+
+		me->setSubValue((*it)->getValue());
+		output.push_back(me);
+		current_size += 1;
+
+		if (clean)
+		{
+			output.push_back(std::make_shared<Node>(Token("' '"), TokenType::CLEANER, std::shared_ptr<Node>()));
+			current_size += 1;
+		}
 	}
 	else 
 	{
@@ -950,25 +1096,35 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 		while (it != this->getChilds().end())
 		{
-			bool cleanIt = (*it)->getValue() == "{" ||
-						   (*it)->getValue() == "else" ||
-						   (*it)->getValue() == "node" ||
+			bool cleanIt = (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "{" ||
+						   (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "else" ||
+						   (*it)->getType() == TokenType::SPECIAL && (*it)->getValue() == "node" ||
 						   (*it)->getType() == TokenType::PROBE ||
 						   (*it)->getType() == TokenType::TYPE;
 
 			nodeVect out = (*it)->RPN(*it, current_size, clean && cleanIt);
-			current_size += out.size();
 			output.insert(output.cend(), out.begin(), out.end());
+			current_size += out.size();
+
 			if (clean && (*it)->getType() != TokenType::SPECIAL && (*it)->getType() != TokenType::_EOF && !cleanIt)
 			{
 				output.push_back(std::make_shared<Node>(Token("' '"), TokenType::CLEANER, std::shared_ptr<Node>()));
 				current_size += 1;
 			}
-			it++;
+			++it;
 		}
 		if (this->getType() != TokenType::SPECIAL)
 		{
-			output.push_back(me);
+			if (this->token.type == TokensEnum::OP_UNAR_PREF &&
+				(this->getValue() == "+" || this->getValue() == "-" ||
+				 this->getValue() == "&" || this->getValue() == "*" ))
+			{
+				auto me2 = *this;
+				me2.setName(this->getValue() + "1");
+				output.push_back(std::make_shared<Node>(me2));
+			}
+			else
+				output.push_back(me);
 			current_size += 1;
 		}
 		if (this->getValue() == "{" || this->getValue() == "else")
@@ -1030,7 +1186,7 @@ nodeVect Node::previousNamespace()
 		out.push_back(std::make_shared<Node>(Token(obj.first), TokenType::DESTRUCTOR, std::shared_ptr<Node>()));
 	
 	variables.erase(variables.rbegin()->first);
-	//auto it = variables.rbegin(); it++;
+	//auto it = variables.rbegin(); ++it;
 	currentNamespace = variables.rbegin()->first;
 	return out;
 }
@@ -1060,7 +1216,10 @@ void Node::addConstant(std::shared_ptr<Node> me)
 	default:
 		return;
 	}
-	std::dynamic_pointer_cast<Numeric, Coin>(variables[1]->getCoin(name))->set(std::stod(me->getValue()));
+	std::string data = me->getValue();
+
+	findAndReplaceAll(data, ".", ",");
+	std::dynamic_pointer_cast<Numeric, Coin>(variables[1]->getCoin(name))->set(std::stod(data));
 	std::dynamic_pointer_cast<Numeric, Coin>(variables[1]->getCoin(name))->setConst(true);
 	me->setName(name);
 }
@@ -1100,6 +1259,14 @@ void Node::showFunctions(bool methods, std::shared_ptr<FunctionTable> table)
 				std::cout << node->getValue() << "(" << node->getJumper() << ": " << obj.second->getProgram()->at(node->getJumper())->getValue() << ")";
 			else if (node->getType() == TokenType::DESTRUCTOR)
 				std::cout << "~" << node->getValue();
+			else if (node->getType() == TokenType::TYPE)
+				std::cout << node->getValue() << "( " << node->getSubValue() << " )";
+			else if (node->getValue() == ".")
+				std::cout << "." << node->getSubValue();
+			else if (node->getValue() == ".(")
+				std::cout << "." << node->getSubValue() << "()";
+			else if (node->getValue() == "(")
+				std::cout << node->getSubValue() << "()";
 			else
 				std::cout << node->getValue();
 
@@ -1119,6 +1286,15 @@ void Node::showClasses()
 		showFunctions(true, obj.second->getMethods());
 	}
 }
+void Node::clearVarAllocs()
+{
+
+	for (auto& coin : variables[1]->getTable())
+	{
+		if (coin.first.starts_with("##alloc"))
+			variables[1]->eraseCoin(coin.first);
+	}
+}
 
 bool Node::varExists(std::string name)
 {
@@ -1135,7 +1311,7 @@ std::vector<std::shared_ptr<Coin>> Node::allocate(size_t amount)
 {
 	std::vector<std::shared_ptr<Coin>> output = {};
 
-	int attributes_left = amount;
+	size_t attributes_left = amount;
 	
 	nodeVect::iterator it = this->childs.begin();
 	while (it != this->childs.end() && attributes_left > 0)
@@ -1179,6 +1355,13 @@ std::vector<std::shared_ptr<Coin>> Node::allocate(size_t amount)
 			CoinTable newFields = *classes.getClass((*it)->getValue())->getFields();
 			variables[1]->putCoin(
 				Temp_Name, classes.getClass((*it)->getValue()), std::make_shared<CoinTable>(newFields));
+			output.push_back(getCoin(Temp_Name));
+		}
+		else if ((*it)->getValue() == classDeclaration)
+		{
+			//std::cout << "WARN: not full class type\n";
+			
+			variables[1]->putDelayedObjectCoin(Temp_Name, classDeclaration);
 			output.push_back(getCoin(Temp_Name));
 		}
 		++it; --attributes_left;
@@ -1242,7 +1425,8 @@ std::string Node::getOpType()
 	}
 	else if (this->getValue() == ".")
 	{
-		auto buf = checkTypes(this->getFirstChild(), true);
+		auto buf = checkTypes(this->getFirstChild()->getParent(), true);
+
 		if (buf != nullptr)
 			return buf->getType();
 		else
@@ -1324,6 +1508,7 @@ std::string Node::getOpType()
 	else if (this->token.type == TokensEnum::OP_UNAR_PREF && this->getValue() == "*")
 	{
 		std::string operand = this->getFirstChild()->getOpType();
+		
 		if (operand.starts_with("ptr<"))
 			return operand.substr(4, operand.size() - 5);
 		else
@@ -1360,11 +1545,11 @@ std::string Node::getOpType()
 	}
 	else if (this->getType() == TokenType::OPERATION && this->getRang() == 15)
 	{
-		std::shared_ptr<Coin> res = checkTypes(this->getFirstChild());
+		std::shared_ptr<Coin> res = checkTypes(this->getFirstChild(), true);
 		if (res == nullptr || res->isConst())
 		{
-			std::cout << colorText(31) << "ERR: expression must be l_value '" << this->getFirstChild()->getValue() 
-					  << "' at " << this->getPosition() << colorText() << "\n";
+			std::cout << colorText(31) << "ERR: expression must be l_value '" << this->getFirstChild()->getValue()
+				<< "' at " << this->getPosition() << colorText() << "\n";
 			breakCode();
 			return "";
 		}
@@ -1468,13 +1653,28 @@ std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwErr
 		if (obj->getCoinType() == CoinType::POINTER)
 			return std::dynamic_pointer_cast<Pointer, Coin>(obj)->get();
 	}
-	else if (node->getValue() == "++<" || this->getValue() == "--<")
+	else if (node->getValue() == "&" && node->token.type == TokensEnum::OP_UNAR_PREF)
+	{
+		std::shared_ptr<Coin> obj = checkTypes(node->getFirstChild(), throwError);
+		if (obj == nullptr)
+			return nullptr;
+
+		std::string Temp_Name = "##alloc" + std::to_string(tmp_ID); ++tmp_ID;
+		Pointer newPtr = Pointer(Temp_Name, obj->getType(), true);
+		newPtr.set(obj);
+
+		variables[1]->putCoin(std::make_shared<Pointer>(newPtr));
+
+		return getCoin(Temp_Name);
+	}
+	else if (node->getValue() == "++<" || node->getValue() == "--<")
 	{
 		return checkTypes(node->getFirstChild(), throwError);
 	}
 	else if (node->getValue() == ".")
 	{
 		std::shared_ptr<Coin> obj = checkTypes(node->getFirstChild(), throwError);
+
 		if (obj == nullptr)
 			return nullptr;
 
@@ -1504,7 +1704,21 @@ std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwErr
 
 		if (expectedType == "var")
 		{
-			if (object->getFields()->coinExists(node->getLastChild()->getValue()))
+			if (object->getDelayedClass() != "")
+			{
+				if (classes.getClass(object->getDelayedClass())->getFields()->coinExists(node->getLastChild()->getValue()))
+				{
+					return classes.getClass(object->getDelayedClass())->getFields()->getCoin(node->getLastChild()->getValue());
+				}
+				else
+				{
+					if (throwError)
+						std::cout << colorText(31) << "\nUnknown field: "
+						<< node->getLastChild()->getToken().str() << " - of '" << node->getLastChild()->getValue() << "'" << colorText();
+					return nullptr;
+				}
+			}
+			else if (object->getFields()->coinExists(node->getLastChild()->getValue()))
 			{
 				return object->getFields()->getCoin(node->getLastChild()->getValue());
 			}
@@ -1518,13 +1732,44 @@ std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwErr
 		}
 		else if (expectedType == "function")
 		{
-			if (object->getMethods()->functionExists(node->getLastChild()->getValue()))
+			if (object->getDelayedClass() != "")
+			{
+				if (classes.getClass(object->getDelayedClass())->getMethods()->functionExists(node->getLastChild()->getValue()))
+				{
+					return classes.getClass(object->getDelayedClass())->getMethods()->getFunction(node->getLastChild()->getValue())->getReturnValue();
+				}
+				else
+				{
+					if (throwError)
+						std::cout << colorText(31) << "\nUnknown field: "
+						<< node->getLastChild()->getToken().str() << " - of '" << node->getLastChild()->getValue() << "'" << colorText();
+					return nullptr;
+				}
+			}
+			else if (object->getMethods()->functionExists(node->getLastChild()->getValue()))
 				return object->getMethods()->getFunction(node->getLastChild()->getValue())->getReturnValue();
 			else
 			{
 				if (throwError)
 					std::cout << colorText(31) << "\nUnknown method: "
 					<< node->getLastChild()->getToken().str() << " - of '" << previousObj->getValue() << "'" << colorText();
+				return nullptr;
+			}
+		}
+		else if (object->getDelayedClass() != "")
+		{
+			if (classes.getClass(object->getDelayedClass())->getFields()->coinExists(node->getLastChild()->getValue()))
+			{
+				return classes.getClass(object->getDelayedClass())->getFields()->getCoin(node->getLastChild()->getValue());
+			}
+			else if (classes.getClass(object->getDelayedClass())->getMethods()->functionExists(node->getLastChild()->getValue()))
+			{
+				return classes.getClass(object->getDelayedClass())->getMethods()->getFunction(node->getLastChild()->getValue())->getReturnValue();
+			}
+			else
+			{
+				if (throwError)
+					std::cout << colorText(31) << "\nUnknown member '" << node->getLastChild()->getToken().str() << "'" << colorText();
 				return nullptr;
 			}
 		}
@@ -1548,9 +1793,24 @@ std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwErr
 			}
 		}
 	}
+	else if (node->getRang() == 15)
+		return checkTypes(node->getFirstChild(), throwError);
 	else if (node->getType() == TokenType::OPERATION)
-		return {};
+	{
+		std::string type = node->getOpType();
+		std::string Temp_Name = "##alloc" + std::to_string(tmp_ID); ++tmp_ID;
 
+		if (type == "int")
+			variables[1]->putCoin(Temp_Name, NumType::INT);
+		else if (type == "double")
+			variables[1]->putCoin(Temp_Name, NumType::DOUBLE);
+		else if (type == "bool")
+			variables[1]->putCoin(Temp_Name, NumType::BOOL);
+		else if (type == "string")
+			variables[1]->putCoin(Temp_Name);
+		return getCoin(Temp_Name);
+	}
+	
 	if (expectedType == "var")
 	{
 		if (varExists(node->getValue()))
@@ -1569,7 +1829,7 @@ std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwErr
 		else
 		{
 			if (throwError)
-				std::cout << colorText(31) << "\nUnknown function: " << node->getToken().str() << colorText();
+				std::cout << colorText(31) << "Unknown function: " << node->getToken().str() << colorText() << "\n";
 			return nullptr;
 		}
 	}
@@ -1619,9 +1879,9 @@ bool Node::functionAttributesCheck(std::shared_ptr<Node> node)
 		else
 			result = checkTypes(*attribute)->getType();
 
-		if (*order != result)
+		if (*order != result && !areNumerics(*order, result))
 		{
-			std::cout << colorText(31) << "\nWrong attribute type '" << result << "' instead of '" << *order << "'. Argument " 
+			std::cout << colorText(31) << "\nWrong attribute type '" << result << "' instead of '" << *order << "'. Argument "
 					  << (order - attrOrder.begin() + 1) << " of " << func->getName() << "() at ("
 					  << node->getFirstChild()->getToken().line << "," << node->getFirstChild()->getToken().position << ") " << colorText();
 			return false;

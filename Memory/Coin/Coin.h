@@ -11,10 +11,13 @@ enum class CoinType
 	STRING,
 	POINTER,
 	OBJECT,
+	VOID,
 	ERR_TYPE
 };
+
 class Coin
 {
+	friend class Interpreter;
 protected:
 	CoinType type;
 	std::string name;
@@ -35,7 +38,12 @@ public:
 	bool isConst();
 	void setName(std::string name);
 	void setConst(bool Const);
+	void setID(uint32_t id);
 
 	virtual std::string getType() = 0;
 	virtual std::string str() = 0;
+
+	virtual std::shared_ptr<Coin> clone() = 0;
 };
+
+std::string getName(CoinType type);

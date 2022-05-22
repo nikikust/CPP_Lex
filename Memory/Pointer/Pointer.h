@@ -6,6 +6,7 @@ void to_json(json& j, const std::shared_ptr<Coin>& p);
 
 class Pointer : public Coin
 {
+	friend class Interpreter;
 	std::shared_ptr<Coin> data = nullptr;
 	std::string storingType;
 
@@ -21,4 +22,6 @@ public:
 	std::shared_ptr<Coin> get();
 
 	json to_json_edt();
+
+	std::shared_ptr<Coin> clone();
 };

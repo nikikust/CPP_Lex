@@ -109,6 +109,7 @@ public:
 	bool INPUT();
 	bool VOID();
 	bool CLASS();
+	bool EXIT();
 
 	bool CLASS_TYPE();
 	bool SIMPLE_TYPE();
@@ -129,3 +130,5 @@ public:
 
 	bool _EOF();
 };
+
+void parseString(std::string& str);

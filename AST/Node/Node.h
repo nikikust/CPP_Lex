@@ -15,6 +15,7 @@ typedef std::vector<std::shared_ptr<Node>> nodeVect;
 class Node
 {
 	Token token;
+	std::string sub_value = "";
 	TokenType type;
 
 	std::weak_ptr<Node> parent;
@@ -51,7 +52,6 @@ public:
 	FunctionTable& getFunctions();
 	ClassTable& getClasses();
 
-
 	void breakCode();
 
 	std::shared_ptr<Node> addChild(std::shared_ptr<Node> child);
@@ -62,6 +62,7 @@ public:
 	void setJumper(size_t me);
 	void setType(TokenType type);
 	void setTokenType(TokensEnum type);
+	void setSubValue(std::string value);
 
 	nodeVect& getChilds();
 	std::shared_ptr<Node> getFirstChild();
@@ -73,12 +74,14 @@ public:
 	Token& getToken();
 	bool getState();
 	std::string getPosition();
+	std::string getSubValue();
 	
 	int getRang();
 	bool isEmpty();
 	bool isFull();
 	
 	bool fixLinks(std::shared_ptr<Node> me);
+	void clearProbes(std::shared_ptr<Node> me);
 	std::string str(std::shared_ptr<Node> me, std::shared_ptr<Node> local_root, std::shared_ptr<Node> cursor, bool newView = true, std::string offset_string = "", bool is_last = true);
 	std::string RPN_str(bool full);
 	nodeVect RPN(std::shared_ptr<Node> me, size_t current_size, bool clean = false);
@@ -96,6 +99,7 @@ public:
 	void showVars();
 	void showFunctions(bool methods = false, std::shared_ptr<FunctionTable> table = {});
 	void showClasses();
+	void clearVarAllocs();
 
 	std::shared_ptr<Coin> getCoin(std::string name);
 	std::shared_ptr<Function> getMethodFromDot(std::shared_ptr<Node> pointNode);

@@ -13,3 +13,4 @@ std::string& operator*=(std::string& a, unsigned int b);
 
 
 int getTokens(tokenVect& Tokens, std::string fileName = "prog1.prog");
+void findAndReplaceAll(std::string& data, std::string toSearch, std::string replaceStr);

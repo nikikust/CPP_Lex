@@ -23,12 +23,12 @@ std::shared_ptr<FunctionTable> Class::getMethods()
 
 void to_json(json& j, const Class& p)
 {
-	json buf1; to_json(buf1, *p.fields);
-	json buf2; to_json(buf2, *p.methods);
+	json buf1; to_json(buf1, *p.methods);
 	j = json
 	{
 		{"name", p.name},
-		{"fields", buf1},
-		{"methods", buf2}
+		{"fields", p.fieldsInit},
+		{"methods", buf1}
 	};
 }
+

@@ -1,8 +1,10 @@
 #pragma once
 #include "Coin.h"
 
+
 class String : public Coin
 {
+	friend class Interpreter;
 	std::string data = "";
 
 public:
@@ -15,4 +17,6 @@ public:
 	std::string get();
 
 	json to_json_edt();
+
+	std::shared_ptr<Coin> clone();
 };

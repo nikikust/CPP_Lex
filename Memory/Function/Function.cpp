@@ -1,5 +1,5 @@
 #include "Function.h"
-
+#include <iostream>
 
 Function::~Function()
 {
@@ -11,17 +11,24 @@ Function::~Function()
 
 void to_json(json& j, const Function& p)
 {
-	json buf1; to_json(buf1, *p.attributes);
-	json buf2; to_json_edt2(buf2, p.returnValue);
-
 	j = json
 	{
 		{"name", p.name},
-		{"attributes", buf1},
+		{"attributes", p.attributesInit},
 		{"attributesOrder", p.attributesOrder},
-		{"returnValue", buf2},
+		{"attributesNamesOrder", p.attributesNamesOrder},
+		{"returnValue", p.returnValue->str()},
 		{"body", p.body}
 	};
+}
+void from_json(const json& j, Function& p)
+{
+	j.at("name").get_to(p.name);
+	j.at("attributes").get_to(p.attributesInit);
+	j.at("attributesOrder").get_to(p.attributesOrder);
+	j.at("attributesNamesOrder").get_to(p.attributesNamesOrder);
+	j.at("returnValue").get_to(p.retValue);
+	j.at("body").get_to(p.body);
 }
 
 std::string Function::getName()

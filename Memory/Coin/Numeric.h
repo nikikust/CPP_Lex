@@ -9,6 +9,7 @@ enum class NumType
 };
 class Numeric : public Coin
 {
+	friend class Interpreter;
 	double data = 0;
 	NumType numericType;
 
@@ -23,4 +24,6 @@ public:
 	double get();
 
 	json to_json_edt();
+
+	std::shared_ptr<Coin> clone();
 };

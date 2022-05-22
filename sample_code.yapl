@@ -1,56 +1,277 @@
-class tetris
+class Node_Double
 {
-	bool abc(int delta, ptr<ptr<bool> > gamma)
+	double data
+	ptr<Node_Double> next
+	ptr<Node_Double> previous
+	ptr<Node_Double> _nullptr_ND // nullptr for Node_Double
+
+	bool hasNext()
 	{
-		if (**gamma != false)
-		{
-			return delta
-		}
-		return **gamma
+		return next == _nullptr_ND
 	}
-	ptr<int> getPointer(int a)
+
+	bool hasPrevious()
 	{
-		return &a
+		return previous == _nullptr_ND
 	}
-}
-class tetris2
-{
 	
-	bool abc(int delta, ptr<ptr<bool> > gamma)
-	{
-		if (**gamma != false)
-		{
-			return delta
-		}
-		return **gamma
-	}
-	ptr<int> getPointer(int a)
-	{
-		return &a
-	}
-
 }
-int allOK()
+
+class LinkedList_Double
 {
-	int y
-	print("ALL OK!!!!!!!!!!!!!")
-	return 0
+	ptr<Node_Double> _front, _back
+	ptr<Node_Double> _nullptr_ND
+	int _size
+
+	void push_front(double data)
+	{
+		Node_Double newNode
+		
+		newNode.data = data
+		ptr<Node_Double> node = &newNode
+		
+		
+		if (_size == 0)
+		{
+			_front = node
+			_back = node
+		}
+		else
+		{
+			(*_front).previous = node;
+			(*node).next = _front
+			_front = node
+		}
+		++<_size
+	}
+
+	void push_back(double data)
+	{
+		Node_Double newNode
+		newNode.data = data
+		ptr<Node_Double> node = &newNode
+		
+		if (_size == 0)
+		{
+			_front = node
+			_back = node
+		}
+		else
+		{
+			(*_back).next = node;
+			(*node).previous = _back
+			_back = node
+		}
+		++<_size
+	}
+	
+	void pop_front()
+	{
+		if ( _size == 0 )
+		{
+			print("\nList is empty. exit")
+			exit
+		}
+		
+		ptr<Node_Double> buf = _front
+		_front = (*_front).next
+		if (_front != _nullptr_ND)
+		{
+			(*_front).previous = _nullptr_ND
+		}
+		else
+		{		
+			_back = _nullptr_ND
+		}
+		(*buf).next = _nullptr_ND
+		--<_size
+	}
+	
+	void pop_back()
+	{
+		if ( _size == 0 )
+		{
+			print("\nList is empty. exit")
+			exit
+		}
+		
+		ptr<Node_Double> buf = _back
+		_back = (*_back).previous
+		if (_back != _nullptr_ND)
+		{
+			(*_back).next = _nullptr_ND
+		}
+		else
+		{
+			_front = _nullptr_ND
+		}
+		(*buf).previous = _nullptr_ND
+		--<_size
+	}
+	
+	double front()
+	{
+		if (_size == 0)
+		{
+			print("\nList is empty. exit")
+			exit
+		}
+		return (*_front).data
+	}
+	
+	double back()
+	{
+		if (_size == 0)
+		{
+			print("\nList is empty. exit")
+			exit
+		}		
+		return (*_back).data
+	}
+	
+	int size()
+	{
+		return _size
+	}
+	bool empty()
+	{
+		return _size == 0
+	}
+	
+	void print_list()
+	{
+		ptr<Node_Double> cur = _front
+		
+		print("-")
+		while (cur != _nullptr_ND)
+		{
+			print(" " + (*cur).data + " -")
+			cur = (*cur).next
+		}
+	}
 }
-ptr<tetris> classTest
-ptr<tetris> classTest2
-ptr<tetris> classTest3
-ptr<tetris> classTest4
-ptr<tetris> classTest21
-ptr<tetris> classTest31
-ptr<tetris> classTest41
-ptr<ptr<bool> > gosha
-tetris ohMyTetris
-**gosha = ohMyTetris.abc(12, gosha)
+	
+LinkedList_Double List
+
+List.push_back(1)
+List.push_back(2)
+List.push_back(3)
+List.push_back(4)
+List.push_back(5)
+
+print("Size: " + List.size() + "\nList: ")
+List.print_list()
+
+List.pop_back()
+List.pop_front()
+
+print("\n\nSize: " + List.size() + "\nList: ")
+List.print_list()
+
+while (!List.empty())
+	List.pop_back()
+
+print("\n\nSize: " + List.size() + "\nList: ")
+List.print_list()
+
+print("\n\nALL OK")
+
+//class atr
+//{
+//	ptr< ptr<double> > field
+//
+//	void init()
+//	{
+//		field = &(&.0)
+//	}
+//
+//	void set(ptr<double> newField)
+//	{
+//		field = &newField
+//	}
+//
+//	ptr<double> get()
+//	{
+//		return *field
+//	}
+//}
+//
+//atr test
+//test.init()
+//
+//print(*test.get())
+//print("\n")
+//
+//double ar = 2
+//test.set(&ar)
+//print(*test.get())
 
 
-ptr< ptr<int> > pointer
-**pointer += *ohMyTetris.getPointer(2)
-ptr<ptr<string> > a
-print("data> ")
-int ab = 2
-input(**a)
+
+
+
+
+// class tetris
+// {
+// 	int a2
+// 	int b2
+// 	bool abc(int delta, ptr<ptr<bool> > gamma)
+// 	{
+// 		if (**gamma != false)
+// 		{
+// 			return delta
+// 		}
+// 		return **gamma
+// 	}
+// 	ptr<int> getPointer(int a)
+// 	{
+// 		return &a
+// 	}
+// }
+// class tetris2
+// {
+// 	
+// 	bool abc(int delta, ptr<ptr<bool> > gamma)
+// 	{
+// 		if (**gamma != false)
+// 		{
+// 			return delta
+// 		}
+// 		return **gamma
+// 	}
+// 	ptr<int> getPointer(int a)
+// 	{
+// 		return &a
+// 	}
+// 
+// }
+// int allOK(int a1, int b1)
+// {
+// 	int y
+// 	print("ALL OK!!!!!!!!!!!!!")
+// 	return 0
+// }
+// int allOK2(int a1, int b1)
+// {
+// 	int y
+// 	print("ALL OK!!!!!!!!!!!!!")
+// 	return 0
+// }
+// ptr<tetris> classTest
+// ptr<tetris> classTest2
+// ptr<tetris> classTest3
+// ptr<tetris> classTest4
+// ptr<tetris> classTest21
+// ptr<tetris> classTest31
+// ptr<tetris> classTest41
+// ptr<ptr<bool> > gosha
+// tetris ohMyTetris
+// **gosha = ohMyTetris.abc(12, gosha)
+// 
+// 
+// ptr< ptr<int> > pointer
+// **pointer += *ohMyTetris.getPointer(2)
+// ptr<ptr<string> > a
+// print("data> ")
+// int ab = 2
+// input(**a)
