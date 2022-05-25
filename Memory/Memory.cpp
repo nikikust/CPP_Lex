@@ -219,6 +219,10 @@ void ClassTable::putClass(std::string name, std::shared_ptr<CoinTable> fields,
 {
 	table.insert({ name, std::make_shared<Class>(name, fields, fieldsInit, methods) });
 }
+void ClassTable::putClass(std::string name, std::shared_ptr<Class> i_class)
+{
+	table.insert({ name, i_class });
+}
 bool ClassTable::classExists(std::string name)
 {
 	return this->table.contains(name);

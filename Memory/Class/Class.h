@@ -20,9 +20,11 @@ class Class
 
 	std::shared_ptr<FunctionTable> methods;
 
+	bool templated = false;
+
 public:
-	Class(std::string name, std::shared_ptr<CoinTable> fields, std::shared_ptr<RPNVect> fieldsInit, std::shared_ptr<FunctionTable> methods) :
-		  name(name), fields(fields), fieldsInit(fieldsInit), methods(methods) {}
+	Class(std::string name, std::shared_ptr<CoinTable> fields, std::shared_ptr<RPNVect> fieldsInit, std::shared_ptr<FunctionTable> methods, bool T = false) :
+		  name(name), fields(fields), fieldsInit(fieldsInit), methods(methods), templated(T) {}
 	~Class();
 	Class() : name("123") {}
 

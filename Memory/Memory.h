@@ -65,6 +65,7 @@ public:
 
 	void putClass(std::string name, std::shared_ptr<CoinTable> fields, std::shared_ptr<RPNVect> fieldsInit, 
 				  std::shared_ptr<FunctionTable> methods);
+	void putClass(std::string name, std::shared_ptr<Class> i_class);
 	bool classExists(std::string name);
 
 	std::shared_ptr<Class> getClass(std::string name);

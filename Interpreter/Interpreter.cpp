@@ -31,7 +31,7 @@ std::string operator+(std::string a, double b)
 
 Interpreter::Interpreter()
 {
-	std::ifstream fin("output\\FULL.json", std::ios::in | std::ios::binary);
+	std::ifstream fin("prog.json", std::ios::in | std::ios::binary);
 	
 	std::vector<uint8_t> v_ubjson((std::istreambuf_iterator<char>(fin)), std::istreambuf_iterator<char>());
 	fin.close();

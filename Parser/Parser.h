@@ -17,6 +17,7 @@ class Parser
 	RPNVect RPN;
 
 	std::vector<std::string> knownClasses;
+	std::vector<std::string> knownTemplatedClasses;
 	std::vector<std::string> knownFunctions;
 
 public:
@@ -30,7 +31,7 @@ public:
 	void showFunctions();
 	void showClasses();
 
-	void saveData();
+	void saveData(std::string path, bool _single_data_file = 1);
 
 	bool checkToken(bool x, std::string type, bool moveIter = true);
 	bool breakCode(std::string message = "");
@@ -79,6 +80,7 @@ public:
 
 	bool literal();
 	bool call();
+	bool templator();
 
 	bool block();
 	bool array_declatation_part();
@@ -110,10 +112,12 @@ public:
 	bool VOID();
 	bool CLASS();
 	bool EXIT();
+	bool TEMPLATE();
 
 	bool CLASS_TYPE();
 	bool SIMPLE_TYPE();
 	bool TEMPLATED_TYPE();
+	bool TEMPL_TYPE();
 	
 	bool BRACKET_L_FIG(); // {
 	bool BRACKET_R_FIG(); // }

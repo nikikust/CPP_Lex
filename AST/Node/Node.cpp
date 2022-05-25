@@ -42,6 +42,17 @@ std::shared_ptr<Node> Node::replaceLastChild(std::shared_ptr<Node> child)
 	this->childs.pop_back();
 	return this->addChild(child);
 }
+uint32_t Node::child_adr(std::shared_ptr<Node> child)
+{
+	uint32_t cnt = 0;
+	for (auto& obj : childs)
+	{
+		if (obj == child)
+			return cnt;
+		++cnt;
+	}
+	return cnt;
+}
 
 void Node::setParent(std::shared_ptr<Node> i_parent)
 {
@@ -200,7 +211,7 @@ bool Node::isFull()
 			return amount >= 4;
 		else if (val == "function_declaration")
 			return amount >= 3;
-		else if (val == "else" || val == "print" || val == "input" || val == "return")
+		else if (val == "else" || val == "print" || val == "input" || val == "return" || val == "template")
 			return amount >= 1;
 		else if (val == "break" || val == "continue" || val == "exit")
 			return 1;
@@ -341,8 +352,9 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 	if (this->getType() == TokenType::CONSTANT)
 		addConstant(me);
+	
 
-	nodeVect output;
+	nodeVect output = {};
 	nodeVect::iterator it = this->childs.begin();
 
 	if (this->getType() == TokenType::_EOF)
@@ -616,26 +628,26 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	}
 	else if (this->getValue() == "return")
 	{
-		if (functionDeclaration == "")
+		if (functionDeclaration.top() == "")
 		{
 			std::cout << colorText(31) << "ERR: 'return' must be inside function. " << this->token.str() << colorText() << "\n";
 			breakCode();
 			return {};
 		}
 
-		if (functionDeclaration != "void")
+		if (functionDeclaration.top() != "void")
 		{
 			if (this->getChilds().empty())
 			{
-				std::cout << colorText(31) << "ERR: function must return '" << functionDeclaration << "' at " << this->token.str() << colorText() << "\n";
+				std::cout << colorText(31) << "ERR: function must return '" << functionDeclaration.top() << "' at " << this->token.str() << colorText() << "\n";
 				breakCode();
 				return {};
 			}
 
 			std::string val = this->getFirstChild()->getOpType();
-			if (val != functionDeclaration && !areNumerics(val, functionDeclaration))
+			if (val != functionDeclaration.top() && !areNumerics(val, functionDeclaration.top()))
 			{
-				std::cout << colorText(31) << "ERR: function returns '" << functionDeclaration << "', provided '" << val << "'" << colorText() << "\n";
+				std::cout << colorText(31) << "ERR: function returns '" << functionDeclaration.top() << "', provided '" << val << "'" << colorText() << "\n";
 				breakCode();
 				return {};
 			}
@@ -743,53 +755,67 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	else if (this->getValue() == "class")
 	{
 		nextNamespace();
-		classDeclaration = (*it)->getValue();
-
+		classDeclaration.push((*it)->getValue());
+		
 		++it;
 
-		auto& body = *it;
-
-		nodeVect::iterator it2 = body->childs.begin();
-		nodeVect fieldsVect;
-		while (it2 != body->childs.end())
+		if (!((*it)->getValue() == "template" && replace_with.empty()))
 		{
-			if ((*it2)->getType() == TokenType::TYPE)	// FIELDS
+			if ((*it)->getValue() == "template")
 			{
-				auto field = (*it2)->RPN(*it2, 0);
-				fieldsVect.insert(fieldsVect.cend(), field.begin(), field.end());
-				//current_size += field.size();
+				replace_what.push((*it)->getFirstChild()->getValue());
+				++it;
 			}
-			++it2;
-		}
-		CoinTable fields = *variables[currentNamespace];
-		
-		RPNVect fieldsRPN;
-		for (auto& obj : fieldsVect)
-			fieldsRPN.push_back(std::make_shared<RPN_Element>(
-				obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper(), obj->getSubValue()));
 
-		classes.putClass(classDeclaration, std::make_shared<CoinTable>(fields), 
-						 std::make_shared<RPNVect>(fieldsRPN), std::make_shared<FunctionTable>());
+			auto& body = *it;
 
-		it2 = body->childs.begin();
-		while (it2 != body->childs.end())
-		{
-			if ((*it2)->getType() == TokenType::SPECIAL)	// METHODS
-				(*it2)->RPN(*it2, current_size);
-			++it2;
-		}
-
-		for (auto& obj : classes.getClass(classDeclaration)->getFields()->getTable())
-		{
-			if (obj.second->getCoinType() == CoinType::OBJECT)
+			nodeVect::iterator it2 = body->childs.begin();
+			nodeVect fieldsVect;
+			while (it2 != body->childs.end())
 			{
-				std::shared_ptr<Object> object = std::dynamic_pointer_cast<Object, Coin>(obj.second);
-				if (object->getDelayedClass() == classDeclaration)
-					object->upgradeToFull(classes.getClass(classDeclaration));
+				if ((*it2)->getType() == TokenType::TYPE)	// FIELDS
+				{
+					auto field = (*it2)->RPN(*it2, 0);
+					fieldsVect.insert(fieldsVect.cend(), field.begin(), field.end());
+				}
+				++it2;
 			}
+			CoinTable fields = *variables[currentNamespace];
+
+			RPNVect fieldsRPN;
+			for (auto& obj : fieldsVect)
+				fieldsRPN.push_back(std::make_shared<RPN_Element>(
+					obj->getValue(), obj->getType(), obj->getToken().line, obj->getToken().position, obj->getJumper(), obj->getSubValue()));
+
+			classes.putClass(classDeclaration.top(), std::make_shared<CoinTable>(fields),
+				std::make_shared<RPNVect>(fieldsRPN), std::make_shared<FunctionTable>());
+			
+			it2 = body->childs.begin();
+			while (it2 != body->childs.end())
+			{
+				if ((*it2)->getType() == TokenType::SPECIAL)	// METHODS
+					(*it2)->RPN(*it2, current_size);
+				++it2;
+			}
+
+			for (auto& obj : classes.getClass(classDeclaration.top())->getFields()->getTable())
+			{
+				if (obj.second->getCoinType() == CoinType::OBJECT)
+				{
+					std::shared_ptr<Object> object = std::dynamic_pointer_cast<Object, Coin>(obj.second);
+					if (object->getDelayedClass() == classDeclaration.top())
+						object->upgradeToFull(classes.getClass(classDeclaration.top()));
+				}
+			}
+
+			replace_what.pop();
+		}
+		else
+		{
+			templated_classes.insert({ classDeclaration.top() , this->getParent()->child_adr(me) });
 		}
 
-		classDeclaration = "";
+		classDeclaration.pop();
 		previousNamespace();
 	}
 	else if (this->getValue() == "function_declaration")
@@ -826,17 +852,17 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		std::string functionName = typeAndName.front()->getSubValue();
 		std::string functionReturnType = typeAndName.front()->getValue();
 
-		functionDeclaration = functionReturnType;
+		functionDeclaration.push(functionReturnType);
 
 		++it;
 
-		if (classDeclaration == "" && functions.functionExists(functionName))
+		if (classDeclaration.top() == "" && functions.functionExists(functionName))
 		{
 			std::cout << colorText(31) << "ERR: function name duplication. " << this->getFirstChild()->getFirstChild()->token.str() << colorText() << "\n";
 			breakCode();
 			return {};
 		}
-		else if (classDeclaration != "" && classes.getClass(classDeclaration)->getMethods()->functionExists(functionName))
+		else if (classDeclaration.top() != "" && classes.getClass(classDeclaration.top())->getMethods()->functionExists(functionName))
 		{
 			std::cout << colorText(31) << "ERR: method name duplication. " << this->getFirstChild()->getFirstChild()->token.str() << colorText() << "\n";
 			breakCode();
@@ -885,8 +911,8 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 				++it2;
 		}
 
-		if (classDeclaration != "")
-			classes.getClass(classDeclaration)->getMethods()->putFunction(
+		if (classDeclaration.top() != "")
+			classes.getClass(classDeclaration.top())->getMethods()->putFunction(
 				functionName, std::make_shared<CoinTable>(attributes), order, orderNames,
 				std::make_shared<RPNVect>(attributesRPN), getCoin(functionName), std::make_shared<RPNVect>(bodyRPN));
 		else
@@ -896,7 +922,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 		previousNamespace();
 
-		functionDeclaration = "";
+		functionDeclaration.pop();
 		previousNamespace();
 	}
 	else if (this->getValue() == "exit") 
@@ -926,8 +952,36 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	}
 	else if (this->getType() == TokenType::TYPE)
 	{
-		if (this->getToken().type == TokensEnum::TEMPLATEDTYPE)
+		if (templated_classes.contains(this->getValue()))
+		{
+			if (!classes.classExists(this->concatTypes()))
+			{
+				replace_with.push(this->getFirstChild()->getFirstChild());
+
+				std::shared_ptr<Node> root = this->parent.lock();
+				while (root->parent.lock() != nullptr)
+					root = root->parent.lock();
+
+				std::shared_ptr<Node> class_create = root->childs.at(templated_classes.at(this->getValue()))->clone(root);
+				class_create->getFirstChild()->setName(this->concatTypes());
+
+				replace_what.push(class_create->childs.at(1)->getFirstChild()->getValue());
+
+				class_create->getLastChild()->replace_template();
+
+				functionDeclaration.push("");
+				class_create->RPN(class_create, 0);
+				functionDeclaration.pop();
+
+				replace_what.pop();
+				replace_with.pop();
+			}
 			++it;
+		}
+		else if (this->getValue() == "ptr")
+		{
+			++it;
+		}
 
 		while (it != this->childs.end())
 		{
@@ -974,11 +1028,18 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 					variables[currentNamespace]->putCoin(
 						(*it)->getFirstChild()->getValue(), classes.getClass(this->getValue()), newFields);
 				}
+				else if (classes.classExists(this->concatTypes()))
+				{
+					std::shared_ptr<CoinTable> newFields = classes.getClass(this->concatTypes())->getFields()->clone();
+					variables[currentNamespace]->putCoin(
+						(*it)->getFirstChild()->getValue(), classes.getClass(this->concatTypes()), newFields);
+				}
 				else if (this->getValue() == "void")
 					variables[currentNamespace]->putCoin((*it)->getFirstChild()->getValue(), true, true);
 				else
 				{
-					std::cout << colorText(31) << "ERR: unknown variable type. " << this->token.str() << colorText() << "\n";
+					std::cout << colorText(31) << "ERR: unknown variable type '" << this->concatTypes()
+											   << "' at " << this->getPosition() << colorText() << "\n";
 					breakCode();
 					return {};
 				}
@@ -992,7 +1053,8 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			}
 			else
 			{
-				if (varExists((*it)->getValue()) || functions.functionExists((*it)->getValue()) || classes.classExists((*it)->getValue()))
+				if (varExists((*it)->getValue()) || functions.functionExists((*it)->getValue()) ||
+					classes.classExists((*it)->getValue()) || classes.classExists((*it)->concatTypes()))
 				{
 					std::cout << colorText(31) << "ERR: variable name duplication. " << (*it)->token.str() << colorText() << "\n";
 					breakCode();
@@ -1001,7 +1063,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 				
 				auto me2 = *this;
 				if (this->getToken().type == TokensEnum::TEMPLATEDTYPE)
-					me2.setName("ptr<" + this->getFirstChild()->concatTypes() + ">");
+					me2.setName(this->getValue() + "<" + this->getFirstChild()->concatTypes() + ">");
 				me2.setSubValue((*it)->getValue());
 				output.push_back(std::make_shared<Node>(me2));
 				current_size += 1;
@@ -1018,7 +1080,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 					auto res = this->getFirstChild()->allocate(1);
 					if (res.size() != 1)
 					{
-						std::cout << "ERR: wrong amount of arguments for ptr: " << res.size() << " instead of 1\n";
+						std::cout << "\nERR: wrong amount of arguments for ptr: " << res.size() << " instead of 1 at " << this->getPosition();
 						breakCode();
 						return {};
 					}
@@ -1033,11 +1095,18 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 					variables[currentNamespace]->putCoin(
 						(*it)->getValue(), classes.getClass(this->getValue()), newFields);
 				}
+				else if (classes.classExists(this->concatTypes()))
+				{
+					std::shared_ptr<CoinTable> newFields = classes.getClass(this->concatTypes())->getFields()->clone();
+					variables[currentNamespace]->putCoin(
+						(*it)->getValue(), classes.getClass(this->concatTypes()), newFields);
+				}
 				else if (this->getValue() == "void")
 					variables[currentNamespace]->putCoin((*it)->getValue(), true, true);
 				else
 				{
-					std::cout << colorText(31) << "ERR: unknown variable type. " << this->token.str() << colorText() << "\n";
+					std::cout << colorText(31) << "ERR: unknown variable type '" << this->concatTypes() 
+							  << "' at " << this->getPosition() << colorText() << "\n";
 					breakCode();
 					return {};
 				}
@@ -1357,12 +1426,58 @@ std::vector<std::shared_ptr<Coin>> Node::allocate(size_t amount)
 				Temp_Name, classes.getClass((*it)->getValue()), std::make_shared<CoinTable>(newFields));
 			output.push_back(getCoin(Temp_Name));
 		}
-		else if ((*it)->getValue() == classDeclaration)
+		else if (classes.classExists((*it)->concatTypes()))
+		{
+			CoinTable newFields = *classes.getClass((*it)->concatTypes())->getFields();
+			variables[1]->putCoin(
+				Temp_Name, classes.getClass((*it)->concatTypes()), std::make_shared<CoinTable>(newFields));
+			output.push_back(getCoin(Temp_Name));
+		}
+		else if ((*it)->getValue() == classDeclaration.top())
 		{
 			//std::cout << "WARN: not full class type\n";
 			
-			variables[1]->putDelayedObjectCoin(Temp_Name, classDeclaration);
+			variables[1]->putDelayedObjectCoin(Temp_Name, classDeclaration.top());
 			output.push_back(getCoin(Temp_Name));
+		}
+		else if ((*it)->concatTypes() == classDeclaration.top())
+		{
+			//std::cout << "WARN: not full class type\n";
+			
+			variables[1]->putDelayedObjectCoin(Temp_Name, classDeclaration.top());
+			output.push_back(getCoin(Temp_Name));
+		}
+		else if (templated_classes.contains((*it)->getValue()))
+		{
+			replace_with.push((*it)->getFirstChild()->getFirstChild());
+
+			std::shared_ptr<Node> root = this->parent.lock();
+			while (root->parent.lock() != nullptr)
+				root = root->parent.lock();
+
+			std::shared_ptr<Node> class_create = root->childs.at(templated_classes.at((*it)->getValue()))->clone(root);
+			class_create->getFirstChild()->setName((*it)->concatTypes());
+
+			replace_what.push(class_create->childs.at(1)->getFirstChild()->getValue());
+
+			class_create->getLastChild()->replace_template();
+
+			functionDeclaration.push("");
+			class_create->RPN(class_create, 0);
+			functionDeclaration.pop();
+
+			replace_what.pop();
+			replace_with.pop();
+
+			CoinTable newFields = *classes.getClass((*it)->concatTypes())->getFields();
+
+			variables[1]->putCoin(
+				Temp_Name, classes.getClass((*it)->concatTypes()), std::make_shared<CoinTable>(newFields));
+			output.push_back(getCoin(Temp_Name));
+		}
+		else
+		{
+			std::cout << "\nERR: can't allocate! " << (*it)->concatTypes();
 		}
 		++it; --attributes_left;
 	}
@@ -1899,7 +2014,9 @@ bool Node::functionAttributesCheck(std::shared_ptr<Node> node)
 
 std::string Node::concatTypes()
 {
-	if (this->getChilds().empty())
+	if (!replace_what.empty() && this->getValue() == replace_what.top())
+		return replace_with.top()->concatTypes();
+	else if (this->getChilds().empty())
 		return getValue();
 	else if (this->getValue() != "<")
 		return getValue() + "<" + this->getFirstChild()->concatTypes() + ">";
@@ -1915,6 +2032,44 @@ std::string Node::concatTypes()
 	}
 
 	return buf;
+}
+
+std::shared_ptr<Node> Node::clone(std::shared_ptr<Node> parent)
+{
+	std::shared_ptr<Node> res = std::make_shared<Node>(token, type, parent, jumper);
+	res->setSubValue(sub_value);
+
+	nodeVect::iterator it = childs.begin();
+	while (it != childs.end())
+	{
+		res->addChild((*it)->clone(res));
+		++it;
+	}
+
+	return res;
+}
+void Node::replace_template()
+{
+	nodeVect::iterator it = childs.begin();
+	while (it != childs.end())
+	{
+		if (!replace_what.empty() && (*it)->getValue() == replace_what.top())
+		{
+			
+			std::shared_ptr<Node> replaced = replace_with.top()->clone((*it)->getParent());
+
+			nodeVect::iterator it2 = (*it)->childs.begin();
+			while (it2 != (*it)->childs.end())
+			{
+				replaced->addChild(*it2);
+				++it2;
+			}
+			*it = replaced;
+		}
+		else
+			(*it)->replace_template();
+		++it;
+	}
 }
 
 

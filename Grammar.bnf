@@ -22,7 +22,7 @@ declaration	:-	type_specification (function_declaration |
 			|	VOID function_declaration
 			;
 
-class_declaration	:-	CLASS IDENTIFIER class_block
+class_declaration	:-	CLASS IDENTIFIER (TEMPLATE TEMPL_TYPE)? class_block
 					;
 
 class_block	:-	L_FIG declaration* R_FIG
@@ -101,11 +101,14 @@ postfix_expression	:-	literal
 					|	L_RND arifmetic_expression R_RND
 					;
 
-literal	:-	IDENTIFIER call*
+literal	:-	IDENTIFIER templator? call*
 		|	STRING
 		|	INT
 		|	FLOAT
 		;
+
+templator	:-	L_TRG specificator R_TRG
+			;
 
 call	:-	L_RND arifmetic_expression_list? R_RND
 		|	L_SQR arifmetic_expression R_SQR

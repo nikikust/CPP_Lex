@@ -6,8 +6,6 @@
 #include "Parser.h"
 #include "../profile.h"
 
-#define _single_data_file
-
 
 Parser::Parser() {}
 Parser::~Parser()
@@ -75,47 +73,46 @@ void Parser::showFunctions()
 		tree.showFunctions();
 }
 
-void Parser::saveData()
+void Parser::saveData(std::string path, bool _single_data_file)
 {
-	if (!std::filesystem::exists("output"))
-		std::filesystem::create_directory("output");
+	if (!_single_data_file)
+	{
+		json RPN_JSON, FUNCTIONS_JSON, CLASSES_JSON, VARIABLES_JSON;
 
-#ifndef _single_data_file
-	json RPN_JSON, FUNCTIONS_JSON, CLASSES_JSON, VARIABLES_JSON;
+		RPN_JSON = RPN;
+		FUNCTIONS_JSON = tree.getFunctions();
+		CLASSES_JSON = tree.getClasses();
+		VARIABLES_JSON = *(tree.getVariables()[1]);
 
-	RPN_JSON = RPN;
-	FUNCTIONS_JSON = tree.getFunctions();
-	CLASSES_JSON = tree.getClasses();
-	VARIABLES_JSON = *(tree.getVariables()[1]);
+		std::ofstream fout1("output\\RPN.json");
+		fout1 << RPN_JSON;
+		fout1.close();
 
-	std::ofstream fout1("output\\RPN.json");
-	fout1 << RPN_JSON;
-	fout1.close();
+		std::ofstream fout2("output\\Functions.json");
+		fout2 << FUNCTIONS_JSON;
+		fout2.close();
 
-	std::ofstream fout2("output\\Functions.json");
-	fout2 << FUNCTIONS_JSON;
-	fout2.close();
+		std::ofstream fout3("output\\Classes.json");
+		fout3 << CLASSES_JSON;
+		fout3.close();
 
-	std::ofstream fout3("output\\Classes.json");
-	fout3 << CLASSES_JSON;
-	fout3.close();
+		std::ofstream fout4("output\\Variables.json");
+		fout4 << VARIABLES_JSON;
+		fout4.close();
+	}
+	else {
+		json ALL;
+		ALL["RPN"] = RPN;
+		ALL["Functions"] = tree.getFunctions();
+		ALL["Classes"] = tree.getClasses();
+		ALL["Variables"] = *(tree.getVariables()[1]);
 
-	std::ofstream fout4("output\\Variables.json");
-	fout4 << VARIABLES_JSON;
-	fout4.close();
-#else
-	json ALL;
-	ALL["RPN"] = RPN;
-	ALL["Functions"] = tree.getFunctions();
-	ALL["Classes"] = tree.getClasses();
-	ALL["Variables"] = *(tree.getVariables()[1]);
+		std::vector<std::uint8_t> v_ubjson = json::to_ubjson(ALL);
 
-	std::vector<std::uint8_t> v_ubjson = json::to_ubjson(ALL);
-
-	std::ofstream fout("output\\FULL.json", std::ios::out | std::ios::binary);
-	fout.write(reinterpret_cast<const char*>(v_ubjson.data()), v_ubjson.size());
-	fout.close();
-#endif
+		std::ofstream fout(path, std::ios::out | std::ios::binary);
+		fout.write(reinterpret_cast<const char*>(v_ubjson.data()), v_ubjson.size());
+		fout.close();
+	}
 }
 
 bool Parser::checkToken(bool x, std::string type, bool moveIter)
@@ -225,7 +222,21 @@ bool Parser::class_declaration()
 	if (StateOK)
 		knownClasses.push_back(last_token.value);
 
+	bool templated_it = false;
+	if (TRY(TEMPLATE()))
+	{
+		knownTemplatedClasses.push_back(knownClasses.back());
+		templated_it = true;
+
+		USE(TEMPL_TYPE());
+		knownClasses.push_back(last_token.value);
+
+		tree.goUp();
+		tree.goUp();
+	}
 	USE(class_block());
+	if (templated_it)
+		knownClasses.pop_back();
 
 	return StateOK;
 }
@@ -377,7 +388,7 @@ bool Parser::templated_specificator()
 bool Parser::simple_specificator()
 {
 	return StateOK &&
-		(SIMPLE_TYPE() || CLASS_TYPE());
+		   (SIMPLE_TYPE() || CLASS_TYPE());
 }
 bool Parser::type_specification()
 {
@@ -771,6 +782,13 @@ bool Parser::EXIT()
 	}
 	return x;
 }
+bool Parser::TEMPLATE()
+{
+	bool x = checkToken((*TokenIterator)->value == "template", "TEMPLATE");
+	if (x)
+		return tree.addToken(last_token, TokenType::SPECIAL);
+	return x;
+}
 
 bool Parser::SIMPLE_TYPE()
 {
@@ -784,6 +802,14 @@ bool Parser::TEMPLATED_TYPE()
 	bool x = checkToken((*TokenIterator)->type == TokensEnum::TEMPLATEDTYPE, "TEMPLATED_TYPE");
 	if (x)
 		return tree.addToken(last_token, TokenType::TYPE);
+	else if (std::find(knownTemplatedClasses.begin(), knownTemplatedClasses.end(), (*TokenIterator)->value) != knownTemplatedClasses.end())
+	{
+		checkToken((*TokenIterator)->type == TokensEnum::IDENTIFIER, "USER_TYPE");
+		last_token.type = TokensEnum::TEMPLATEDTYPE;
+		return tree.addToken(last_token, TokenType::TYPE);
+	}
+	else
+		return 0;
 	return x;
 }
 bool Parser::CLASS_TYPE()
@@ -798,6 +824,20 @@ bool Parser::CLASS_TYPE()
 		}
 		else
 			return 0;
+	}
+	return x;
+}
+bool Parser::TEMPL_TYPE()
+{
+	bool x = checkToken((*TokenIterator)->type == TokensEnum::IDENTIFIER, "TEMPL_TYPE");
+	if (x)
+	{
+		if (std::find(knownClasses.begin(), knownClasses.end(), last_token.value) != knownClasses.end())
+		{
+			std::cout << colorText(31) << "\nUse of class name as type name is prohibited!" << colorText();
+			return 0;
+		}
+		return tree.addToken(last_token, TokenType::TYPE);
 	}
 	return x;
 }

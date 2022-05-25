@@ -1,3 +1,5 @@
+
+#include <boost/program_options.hpp>
 #include <iostream>
 
 #include "Lexer/Lexer.h"
@@ -6,40 +8,51 @@
 
 #include "profile.h"
 
-#define _counters
-//#define _output
+
+namespace opt = boost::program_options;
 
 
 int main(int argc, char* argv[])
 {
 	setlocale(LC_ALL, "Rus");
-	
-	std::string input = "sample_code.yapl";
-	if (argc > 1)
-	{
-		input = static_cast<std::string>(argv[1]);
 
-		if (strlen(argv[1]) <= 5
-			|| (strlen(argv[1]) >= 6
-				&& argv[1][strlen(argv[1]) - 1] != 'l'
-				&& argv[1][strlen(argv[1]) - 2] != 'p'
-				&& argv[1][strlen(argv[1]) - 3] != 'a'
-				&& argv[1][strlen(argv[1]) - 4] != 'y'
-				&& argv[1][strlen(argv[1]) - 5] != '.'
-				)
-			)
+	opt::options_description desc("All options");
+
+	desc.add_options()
+		("file_path,fp", opt::value<std::string>()->default_value("sample_code.yapl"), "path to compile file")
+		("output_path,o", opt::value<std::string>()->default_value("prog.json"), "path to output file")
+		("lexer_res,l", opt::value<bool>()->default_value(false), "show lexing results")
+		("parser_res,p", opt::value<bool>()->default_value(false), "show parsing results")
+		("counters,c", opt::value<bool>()->default_value(false), "show counters")
+		("usecolors,u", opt::value<bool>()->default_value(false), "use colors for output")
+		("help", "produce help message");
+
+	opt::variables_map vm;
+
+	opt::store(opt::parse_command_line(argc, argv, desc), vm);
+	opt::notify(vm);
+
+	if (vm.count("help")) {
+		std::cout << desc << "\n";
+		return 1;
+	}
+
+	enable_colors(vm["usecolors"].as<bool>());
+
+	std::vector<std::shared_ptr<Token>> Tokens;
+
+	if (vm["counters"].as<bool>())
+	{
+		auto a = LogDuration("Lexing time: ");
+		if (!getTokens(Tokens, vm["file_path"].as<std::string>()))
 		{
-			std::cout << colorText(31) << "\n<< Usage: DSL [source].yapl >>\n" << colorText();
+			std::cout << colorText(31) << "!Lexer error!\n" << colorText();
 			return 1;
 		}
 	}
-
-	std::vector<std::shared_ptr<Token>> Tokens;
+	else
 	{
-#ifdef _counters
-		auto a = LogDuration("Lexing time: ");
-#endif
-		if (!getTokens(Tokens, input))
+		if (!getTokens(Tokens, vm["file_path"].as<std::string>()))
 		{
 			std::cout << colorText(31) << "!Lexer error!\n" << colorText();
 			return 1;
@@ -47,16 +60,17 @@ int main(int argc, char* argv[])
 	}
 
 	// --- //
-	/*
-	std::cout << "\nTokens list (amount: " << Tokens.size() << "):\n";
-	for (auto& token : Tokens)
+	if (vm["lexer_res"].as<bool>())
 	{
-		std::cout << "< " << getName(token->type) << " >\t< "
-							<< ((token->type != TokensEnum::NEWLINE) ? token->value : "\\n") << " >\t | Line:Pos - "
-							<< token->line << ":" << token->position << std::endl;
+		std::cout << "\nTokens list (amount: " << Tokens.size() << "):\n";
+		for (auto& token : Tokens)
+		{
+			std::cout << "< " << getName(token->type) << " >\t< "
+				<< ((token->type != TokensEnum::NEWLINE) ? token->value : "\\n") << " >\t | Line:Pos - "
+				<< token->line << ":" << token->position << std::endl;
+		}
+		std::cout << "\nTotal: " << Tokens.size() << "\n---------------------------------------------------------\n";
 	}
-	std::cout << "\nTotal: " << Tokens.size() << "\n---------------------------------------------------------\n";
-	*/
 	// --- //
 
 	//	   __________.
@@ -72,50 +86,54 @@ int main(int argc, char* argv[])
 	Parser parser;
 	bool parse_result;
 	bool RPN_result;
+
+	if (vm["counters"].as<bool>())
 	{
-#ifdef _counters
 		auto a = LogDuration("Parsing time: ");
-#endif
 		parse_result = parser.lang(Tokens);
-	}   // Average time for Lex+Parse - 131.34mks, 190mks
-
-#ifdef _output
-	std::cout << "\n\nTokens list after parse (amount: " << Tokens.size() << "):";
-	for (auto& token : Tokens)
-	{
-		std::cout << "\n< " << getName(token->type) << " >\t< ";
-		std::cout << ((token->type != TokensEnum::NEWLINE) ? token->value : "\\n") << " >\t";
-		std::cout << token->gotIn;
 	}
-	std::cout << "\n\nParse result: " << (parse_result ? colorText(32) + "code is correct" : colorText(31) + "mistake found") << colorText();
-#endif
+	else
+		parse_result = parser.lang(Tokens);
 
-	if (parse_result)
+	if (vm["parser_res"].as<bool>())
 	{
-#ifdef _output
+		std::cout << "\n\nTokens list after parse (amount: " << Tokens.size() << "):";
+		for (auto& token : Tokens)
+		{
+			std::cout << "\n< " << getName(token->type) << " >\t< ";
+			std::cout << ((token->type != TokensEnum::NEWLINE) ? token->value : "\\n") << " >\t";
+			std::cout << token->gotIn;
+		}
+		std::cout << "\n\nParse result: " << (parse_result ? colorText(32) + "code is correct" : colorText(31) + "mistake found") << colorText();
+
 		std::cout << "\n\n---------------------------------------------------------\nAbstract Syntax Tree:\n";
 		parser.printTree();
 
 		std::cout << "\n---------------------------------------------------------\nReverse Polish Notation:\n\n";
-#endif
+	}
+
+	if (parse_result)
+	{
 		RPN_result = parser.formRPN();
 		if (RPN_result)
 		{
-#ifdef _output
-			parser.printRPN();
-			parser.showVars();
-			std::cout << "\n\n\nFunctions:";
-			parser.showFunctions();
-			std::cout << "\n\n\nClasses:";
-			parser.showClasses();
-#endif
+			if (vm["parser_res"].as<bool>())
 			{
-#ifdef _counters
+				parser.printRPN();
+				parser.showVars();
+				std::cout << "\n\n\nFunctions:";
+				parser.showFunctions();
+				std::cout << "\n\n\nClasses:";
+				parser.showClasses();
+			}
+			if (vm["counters"].as<bool>())
+			{
 				std::cout << "\n\n";
 				auto a = LogDuration("Saving time: ");
-#endif
-				parser.saveData();
+				parser.saveData(vm["output_path"].as<std::string>());
 			}
+			else
+				parser.saveData(vm["output_path"].as<std::string>());
 		}
 	}
 

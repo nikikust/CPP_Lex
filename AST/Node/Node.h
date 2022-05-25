@@ -1,5 +1,6 @@
 #pragma once
 #include <iostream>
+#include <stack>
 #include <map>
 
 #include "../../Lexer/Lexer.h"
@@ -35,12 +36,16 @@ class Node
 	inline static size_t maxNamespace = 0;
 	inline static std::vector<size_t> lastLoopNamespace;
 	
-	inline static std::string classDeclaration = "";
-	inline static std::string functionDeclaration = "";
+	inline static std::stack<std::string> classDeclaration;
+	inline static std::stack<std::string> functionDeclaration;
 	inline static size_t functionNamespace = 0;
 
 	inline static size_t const_ID = 0;
 	inline static size_t tmp_ID = 0;
+	
+	inline static std::stack<std::string> replace_what;
+	inline static std::stack<std::shared_ptr<Node>> replace_with;
+	inline static std::map<std::string, uint32_t> templated_classes;
 
 public:
 	Node(Token i_token, TokenType i_type, std::shared_ptr<Node> i_parent, size_t jumpTo = 0) :
@@ -56,6 +61,7 @@ public:
 
 	std::shared_ptr<Node> addChild(std::shared_ptr<Node> child);
 	std::shared_ptr<Node> replaceLastChild(std::shared_ptr<Node> child);
+	uint32_t child_adr(std::shared_ptr<Node> child);
 
 	void setParent(std::shared_ptr<Node>);
 	void setName(std::string name);
@@ -112,6 +118,9 @@ public:
 	bool functionAttributesCheck(std::shared_ptr<Node> node);
 
 	std::string concatTypes();
+
+	std::shared_ptr<Node> clone(std::shared_ptr<Node> parent);
+	void replace_template();
 };
 
 std::string getName(TokenType token);

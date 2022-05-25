@@ -5,7 +5,7 @@
 #include "Lexer.h"
 #include "../profile.h"
 
-constexpr bool USE_COLORS = 1;
+bool USE_COLORS = true;
 
 
 static boost::regex REGEX_3000(
@@ -20,7 +20,7 @@ static boost::regex REGEX_3000(
 ([^\\s]+)"
 );
 
-static std::string Keywords("|for|while|if|else|elif|continue|break|return|this|class|print|input|exit|");
+static std::string Keywords("|for|while|if|else|elif|continue|break|return|this|class|print|input|exit|template|");
 static std::string SimpleTypes("|int|double|bool|string|void|");
 static std::string TemplatedTypes("|ptr|list|map|");
 
@@ -128,7 +128,10 @@ void findAndReplaceAll(std::string& data, std::string toSearch, std::string repl
 }
 
 
-
+void enable_colors(bool x)
+{
+	USE_COLORS = x;
+}
 std::string colorText(int color, int background) // black, red, green, yellow, blue, purple, lightblue, white; 
 {
 	if (USE_COLORS)

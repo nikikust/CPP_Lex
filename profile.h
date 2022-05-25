@@ -7,6 +7,7 @@
 #include <sstream>
 
 
+void enable_colors(bool x);
 std::string colorText(int color, int background = 40); // black, red, green, yellow, blue, purple, lightblue, white;
 std::string colorText();
 

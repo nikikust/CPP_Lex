@@ -1,34 +1,34 @@
-class Node_Double
+class Node template T
 {
-	double data
-	ptr<Node_Double> next
-	ptr<Node_Double> previous
-	ptr<Node_Double> _nullptr_ND // nullptr for Node_Double
+	T data
+	ptr< Node<T> > next
+	ptr< Node<T> > previous
+	ptr< Node<T> > _nullptr
 
 	bool hasNext()
 	{
-		return next == _nullptr_ND
+		return next == _nullptr
 	}
 
 	bool hasPrevious()
 	{
-		return previous == _nullptr_ND
+		return previous == _nullptr
 	}
 	
 }
 
-class LinkedList_Double
+class LinkedList template T
 {
-	ptr<Node_Double> _front, _back
-	ptr<Node_Double> _nullptr_ND
+	ptr< Node<T> > _front, _back
+	ptr< Node<T> > _nullptr
 	int _size
 
-	void push_front(double data)
+	void push_front(T data)
 	{
-		Node_Double newNode
+		Node<T> newNode
 		
 		newNode.data = data
-		ptr<Node_Double> node = &newNode
+		ptr< Node<T> > node = &newNode
 		
 		
 		if (_size == 0)
@@ -45,11 +45,12 @@ class LinkedList_Double
 		++<_size
 	}
 
-	void push_back(double data)
+	void push_back(T data)
 	{
-		Node_Double newNode
+		Node<T> newNode
+		
 		newNode.data = data
-		ptr<Node_Double> node = &newNode
+		ptr< Node<T> > node = &newNode
 		
 		if (_size == 0)
 		{
@@ -73,17 +74,17 @@ class LinkedList_Double
 			exit
 		}
 		
-		ptr<Node_Double> buf = _front
+		ptr< Node<T> > buf = _front
 		_front = (*_front).next
-		if (_front != _nullptr_ND)
+		if (_front != _nullptr)
 		{
-			(*_front).previous = _nullptr_ND
+			(*_front).previous = _nullptr
 		}
 		else
 		{		
-			_back = _nullptr_ND
+			_back = _nullptr
 		}
-		(*buf).next = _nullptr_ND
+		(*buf).next = _nullptr
 		--<_size
 	}
 	
@@ -95,21 +96,21 @@ class LinkedList_Double
 			exit
 		}
 		
-		ptr<Node_Double> buf = _back
+		ptr< Node<T> > buf = _back
 		_back = (*_back).previous
-		if (_back != _nullptr_ND)
+		if (_back != _nullptr)
 		{
-			(*_back).next = _nullptr_ND
+			(*_back).next = _nullptr
 		}
 		else
 		{
-			_front = _nullptr_ND
+			_front = _nullptr
 		}
-		(*buf).previous = _nullptr_ND
+		(*buf).previous = _nullptr
 		--<_size
 	}
 	
-	double front()
+	T front()
 	{
 		if (_size == 0)
 		{
@@ -119,7 +120,7 @@ class LinkedList_Double
 		return (*_front).data
 	}
 	
-	double back()
+	T back()
 	{
 		if (_size == 0)
 		{
@@ -140,10 +141,10 @@ class LinkedList_Double
 	
 	void print_list()
 	{
-		ptr<Node_Double> cur = _front
+		ptr< Node<T> > cur = _front
 		
 		print("-")
-		while (cur != _nullptr_ND)
+		while (cur != _nullptr)
 		{
 			print(" " + (*cur).data + " -")
 			cur = (*cur).next
@@ -151,13 +152,13 @@ class LinkedList_Double
 	}
 }
 	
-LinkedList_Double List
+LinkedList<string> List
 
-List.push_back(1)
-List.push_back(2)
-List.push_back(3)
-List.push_back(4)
-List.push_back(5)
+List.push_back("1")
+List.push_back("2")
+List.push_back("3")
+List.push_back("4")
+List.push_back("5")
 
 print("Size: " + List.size() + "\nList: ")
 List.print_list()
