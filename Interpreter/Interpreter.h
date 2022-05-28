@@ -74,6 +74,7 @@ public:
 	void op_reference();
 	void op_get_val();
 	void op_member(std::string name);
+	void op_ptr_member(std::string name);
 	void op_call(std::string name);
 	void op_member_call(std::string name);
 	
@@ -109,6 +110,7 @@ private:
 		OP_reference,
 		OP_get_val,
 		OP_member,
+		OP_ptr_member,
 		OP_call,
 		OP_member_call
 	};
@@ -145,6 +147,7 @@ private:
 		{ "&1", OP_ENUM::OP_reference},
 		{ "*1", OP_ENUM::OP_get_val},
 		{ ".", OP_ENUM::OP_member},
+		{ "->", OP_ENUM::OP_ptr_member},
 		{ "(", OP_ENUM::OP_call},
 		{ ".(", OP_ENUM::OP_member_call}
 	};

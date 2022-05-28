@@ -454,6 +454,9 @@ void Interpreter::run(RPNVect& prog)
 			case Interpreter::OP_ENUM::OP_member:
 				op_member(element->getSubValue());
 				break;
+			case Interpreter::OP_ENUM::OP_ptr_member:
+				op_ptr_member(element->getSubValue());
+				break;
 			case Interpreter::OP_ENUM::OP_call:
 				op_call(element->getSubValue());
 				break;
@@ -986,6 +989,19 @@ void Interpreter::op_member(std::string name)
 	
 	PUT(value->fields->getCoin(name));
 }
+void Interpreter::op_ptr_member(std::string name)
+{
+	if (TOP() == nullptr)
+	{
+		std::cout << "ERR: 002b. when tried to get value via '->', pointer was nullptr\n";
+		exit(21);
+	}
+
+	std::shared_ptr<Object> value = std::dynamic_pointer_cast<Object, Coin>(
+			std::dynamic_pointer_cast<Pointer, Coin>(POP())->data);
+	
+	PUT(value->fields->getCoin(name));
+}
 void Interpreter::op_call(std::string name)
 {
 	std::shared_ptr<Function> func = functions.getFunction(name);
@@ -1036,9 +1052,11 @@ void Interpreter::op_member_call(std::string name)
 	std::shared_ptr<Function> func = obj->methods.lock()->getFunction(name);
 
 	std::shared_ptr<CoinTable> attrInput = func->getAttributes();
-	for (auto& attribute : func->attributesNamesOrder)
+
+	std::vector<std::string>::reverse_iterator it = func->attributesNamesOrder.rbegin();
+	for (; it != func->attributesNamesOrder.rend(); ++it)
 	{
-		std::shared_ptr<Coin> inp = attrInput->getCoin(attribute);
+		std::shared_ptr<Coin> inp = attrInput->getCoin(*it);
 		std::shared_ptr<Coin> buf = POP();
 		switch (buf->type)
 		{
@@ -1075,5 +1093,11 @@ void Interpreter::op_member_call(std::string name)
 	for (auto& attribute : obj->fields->getTable())
 		putCoin(attribute.second);
 
+	std::string buf_name = obj->getName();
+	obj->setName("this");
+	putCoin(obj);
+
 	run(*func->body);
+
+	obj->setName(buf_name);
 }

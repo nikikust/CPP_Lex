@@ -37,6 +37,8 @@ void Parser::printRPN(bool full)
 			std::cout << node->getValue() << "( " << node->getSubValue() << " )";
 		else if (node->getValue() == ".")
 			std::cout << "." << node->getSubValue();
+		else if (node->getValue() == "->")
+			std::cout << "->" << node->getSubValue();
 		else if (node->getValue() == ".(")
 			std::cout << "." << node->getSubValue() << "()";
 		else if (node->getValue() == "(")

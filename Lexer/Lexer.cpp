@@ -15,12 +15,12 @@ static boost::regex REGEX_3000(
 ([0-9]+)|\
 ([A-Za-z_][A-Za-z0-9_]*)|\
 (\"(?:\\\\.|\\\\\\n|[^\"\\\\\\n])*\")|\
-(>(?:\\+\\+|\\-\\-)|(?:\\+\\+|\\-\\-)<|&&|(?:\\|\\|)|(?:<<|>>)=?|[.]|[\\-+*\\/&|\\\\^<>=!%]=?)|\
+(>(?:\\+\\+|\\-\\-)|(?:\\+\\+|\\-\\-)<|&&|(?:\\|\\|)|(?:<<|>>)=?|[.]|->|[\\-+*\\/&|\\\\^<>=!%]=?)|\
 (\\n)|\
 ([^\\s]+)"
 );
 
-static std::string Keywords("|for|while|if|else|elif|continue|break|return|this|class|print|input|exit|template|");
+static std::string Keywords("|for|while|if|else|elif|continue|break|return|class|print|input|exit|template|");
 static std::string SimpleTypes("|int|double|bool|string|void|");
 static std::string TemplatedTypes("|ptr|list|map|");
 

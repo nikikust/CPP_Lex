@@ -7,12 +7,12 @@ class Node template T
 
 	bool hasNext()
 	{
-		return next == _nullptr
+		return next != _nullptr
 	}
 
 	bool hasPrevious()
 	{
-		return previous == _nullptr
+		return previous != _nullptr
 	}
 	
 }
@@ -30,7 +30,6 @@ class LinkedList template T
 		newNode.data = data
 		ptr< Node<T> > node = &newNode
 		
-		
 		if (_size == 0)
 		{
 			_front = node
@@ -38,8 +37,8 @@ class LinkedList template T
 		}
 		else
 		{
-			(*_front).previous = node;
-			(*node).next = _front
+			_front->previous = node
+			node->next = _front
 			_front = node
 		}
 		++<_size
@@ -59,8 +58,8 @@ class LinkedList template T
 		}
 		else
 		{
-			(*_back).next = node;
-			(*node).previous = _back
+			_back->next = node
+			node->previous = _back
 			_back = node
 		}
 		++<_size
@@ -75,16 +74,14 @@ class LinkedList template T
 		}
 		
 		ptr< Node<T> > buf = _front
-		_front = (*_front).next
+		_front = _front->next
+		
 		if (_front != _nullptr)
-		{
-			(*_front).previous = _nullptr
-		}
-		else
-		{		
+			_front->previous = _nullptr
+		else	
 			_back = _nullptr
-		}
-		(*buf).next = _nullptr
+		
+		buf->next = _nullptr
 		--<_size
 	}
 	
@@ -97,16 +94,14 @@ class LinkedList template T
 		}
 		
 		ptr< Node<T> > buf = _back
-		_back = (*_back).previous
+		_back = _back->previous
+		
 		if (_back != _nullptr)
-		{
-			(*_back).next = _nullptr
-		}
+			_back->next = _nullptr
 		else
-		{
 			_front = _nullptr
-		}
-		(*buf).previous = _nullptr
+		
+		buf->previous = _nullptr
 		--<_size
 	}
 	
@@ -117,7 +112,7 @@ class LinkedList template T
 			print("\nList is empty. exit")
 			exit
 		}
-		return (*_front).data
+		return _front->data
 	}
 	
 	T back()
@@ -127,16 +122,135 @@ class LinkedList template T
 			print("\nList is empty. exit")
 			exit
 		}		
-		return (*_back).data
+		return _back->data
 	}
 	
 	int size()
 	{
 		return _size
 	}
+	
 	bool empty()
 	{
 		return _size == 0
+	}
+	
+	T at(int pos)
+	{
+		if (_size == 0)
+		{
+			print("\nList is empty. exit")
+			exit
+		}
+		else if ( pos < 0)
+		{
+			print("\nIndex is out of range. exit")
+			exit
+		}
+		else if ( pos == 0)
+			return _front->data
+		else if ( pos < _size - 1)
+		{
+			ptr< Node<T> > output = _front
+		
+			for (int i = 0; i < pos; ++<i)
+				output = output->next
+			
+			return output->data
+		}
+		else if ( pos == _size - 1)
+			return _back->data
+		else
+		{
+			print("\nIndex is out of range. exit")
+			exit
+		}
+	}
+	
+	bool contains(T data)
+	{
+		if (_size == 0)
+		{
+			print("\nList is empty. exit")
+			exit
+		}
+		
+		ptr< Node<T> > output = _front
+		while (output != _nullptr)
+		{
+			if (output->data == data)
+				return true
+			output = output->next
+		}
+		return false
+	}
+	
+	void insert(T data, int pos)
+	{
+		if ( pos < 0)
+		{
+			print("\nIndex is out of range. exit")
+			exit
+		}
+		else if ( pos == 0)
+			this.push_front(data)
+		else if ( pos < _size - 1)
+		{
+			Node<T> newNode
+			newNode.data = data
+			ptr< Node<T> > node = &newNode;
+			
+			ptr< Node<T> > replace_what = _front
+		
+			for (int i = 0; i < pos; ++<i)
+				replace_what = replace_what->next
+			
+			replace_what->previous->next = node
+			node->previous = replace_what->previous
+			
+			replace_what->previous = node
+			node->next = replace_what
+			
+			++<_size
+		}
+		else if ( pos == _size - 1)
+			this.push_back(data)
+		else
+		{
+			print("\nIndex is out of range. exit")
+			exit
+		}
+	}
+	
+	void erase(int pos)
+	{
+		if ( pos < 0)
+		{
+			print("\nIndex is out of range. exit")
+			exit
+		}
+		else if ( pos == 0)
+			this.pop_front()
+		else if ( pos < _size - 1)
+		{
+			ptr< Node<T> > erase_what = _front
+		
+			for (int i = 0; i < pos; ++<i)
+				erase_what = erase_what->next
+			
+			ptr< Node<T> > buf = erase_what->previous;
+			erase_what->previous->next = erase_what->next;
+			erase_what->next->previous = buf;
+			
+			--<_size
+		}
+		else if ( pos == _size - 1)
+			this.pop_back()
+		else
+		{
+			print("\nIndex is out of range. exit")
+			exit
+		}
 	}
 	
 	void print_list()
@@ -146,14 +260,16 @@ class LinkedList template T
 		print("-")
 		while (cur != _nullptr)
 		{
-			print(" " + (*cur).data + " -")
-			cur = (*cur).next
+			print(" " + cur->data + " -")
+			cur = cur->next
 		}
 	}
 }
-	
+
+// Create list
 LinkedList<string> List
 
+// Fill list
 List.push_back("1")
 List.push_back("2")
 List.push_back("3")
@@ -163,12 +279,27 @@ List.push_back("5")
 print("Size: " + List.size() + "\nList: ")
 List.print_list()
 
+// Insert elements to list
+List.insert("1.5", 1)
+List.insert("0.5", 0)
+
+print("\n\nSize: " + List.size() + "\nList: ")
+List.print_list()
+
+// Erase element to list
+List.erase(3)
+
+print("\n\nSize: " + List.size() + "\nList: ")
+List.print_list()
+
+// Pop elements from list
 List.pop_back()
 List.pop_front()
 
 print("\n\nSize: " + List.size() + "\nList: ")
 List.print_list()
 
+// Pop of all elements from list
 while (!List.empty())
 	List.pop_back()
 
@@ -176,6 +307,9 @@ print("\n\nSize: " + List.size() + "\nList: ")
 List.print_list()
 
 print("\n\nALL OK")
+
+
+
 
 //class atr
 //{

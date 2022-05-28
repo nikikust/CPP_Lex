@@ -39,6 +39,7 @@ class Node
 	inline static std::stack<std::string> classDeclaration;
 	inline static std::stack<std::string> functionDeclaration;
 	inline static size_t functionNamespace = 0;
+	inline static std::stack<std::shared_ptr<Coin>> last_THIS;
 
 	inline static size_t const_ID = 0;
 	inline static size_t tmp_ID = 0;

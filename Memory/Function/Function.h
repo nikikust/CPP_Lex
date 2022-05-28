@@ -28,7 +28,7 @@ class Function
 public:
 	Function(std::string name, std::shared_ptr<CoinTable> attributes, std::vector<std::string> attributesOrder, 
 			 std::vector<std::string> attributesNamesOrder, std::shared_ptr<RPNVect> attributesInit,
-			 std::shared_ptr<Coin> returnValue, std::shared_ptr <RPNVect> body) 
+			 std::shared_ptr<Coin> returnValue, std::shared_ptr <RPNVect> body)
 		:
 			 name(name), attributes(attributes), attributesOrder(attributesOrder), 
 			 attributesNamesOrder(attributesNamesOrder), attributesInit(attributesInit),

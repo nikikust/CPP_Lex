@@ -134,7 +134,8 @@ int Node::getRang()
 	case TokenType::OPERATION:
 		if (this->token.value == "(" ||
 			this->token.value == "[" ||
-			this->token.value == ".")
+			this->token.value == "."||
+			this->token.value == "->")
 			return 1;
 		else if (this->token.type == TokensEnum::OP_UNAR_POST)
 			return 2;
@@ -352,7 +353,6 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 	if (this->getType() == TokenType::CONSTANT)
 		addConstant(me);
-	
 
 	nodeVect output = {};
 	nodeVect::iterator it = this->childs.begin();
@@ -379,8 +379,10 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			++it;
 		}
 
-		if ((*buf)->getValue() == ".")
+		if ((*buf)->getValue() == "." || (*buf)->getValue() == "->")
 		{
+			last_THIS.push(checkTypes(*buf));
+
 			nodeVect out = (*buf)->getFirstChild()->RPN((*buf)->getFirstChild(), current_size);
 			output.insert(output.cend(), out.begin(), out.end());
 			current_size += out.size();
@@ -391,6 +393,8 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 			output.push_back(std::make_shared<Node>(me2));
 			current_size += 1;
+
+			last_THIS.pop();
 		}
 		else
 		{
@@ -790,6 +794,10 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			classes.putClass(classDeclaration.top(), std::make_shared<CoinTable>(fields),
 				std::make_shared<RPNVect>(fieldsRPN), std::make_shared<FunctionTable>());
 			
+			variables[currentNamespace]->putDelayedObjectCoin("this", classDeclaration.top());
+			last_THIS.push(variables[currentNamespace]->getCoin("this"));
+			std::dynamic_pointer_cast<Object, Coin>(last_THIS.top())->upgradeToFull(classes.getClass(classDeclaration.top()));
+
 			it2 = body->childs.begin();
 			while (it2 != body->childs.end())
 			{
@@ -807,6 +815,8 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 						object->upgradeToFull(classes.getClass(classDeclaration.top()));
 				}
 			}
+
+			last_THIS.pop();
 
 			replace_what.pop();
 		}
@@ -1117,7 +1127,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 		if (this->getToken().type == TokensEnum::TEMPLATEDTYPE)
 			this->setName(this->getValue() + "<" + this->getFirstChild()->concatTypes() + ">");
 	}
-	else if (this->getValue() == ".")
+	else if (this->getValue() == "." || this->getValue() == "->")
 	{
 		nodeVect out = (*it)->RPN(*it, current_size);
 		output.insert(output.cend(), out.begin(), out.end());
@@ -1147,8 +1157,9 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 			}
 		}
 		else if (this->getToken().type == TokensEnum::IDENTIFIER && this->getParent()->getValue() != "." &&
-			     !varExists(this->getValue()) && !functions.functionExists(this->getValue()) &&
-				 !classes.classExists(this->getValue()))
+				 !varExists(this->getValue()) && !functions.functionExists(this->getValue()) &&
+				 !classes.classExists(this->getValue()) &&
+				 !(this->getValue() == "this" && !classDeclaration.empty()))
 		{
 			std::cout << colorText(31) << "ERR: unknown variable. " << this->token.str() << colorText() << "\n";
 			breakCode();
@@ -1332,6 +1343,8 @@ void Node::showFunctions(bool methods, std::shared_ptr<FunctionTable> table)
 				std::cout << node->getValue() << "( " << node->getSubValue() << " )";
 			else if (node->getValue() == ".")
 				std::cout << "." << node->getSubValue();
+			else if (node->getValue() == "->")
+				std::cout << "->" << node->getSubValue();
 			else if (node->getValue() == ".(")
 				std::cout << "." << node->getSubValue() << "()";
 			else if (node->getValue() == "(")
@@ -1509,6 +1522,7 @@ std::shared_ptr<Function> Node::getMethodFromDot(std::shared_ptr<Node> node)
 
 	if (from == nullptr)
 		return nullptr;
+
 	if (!std::dynamic_pointer_cast<Object, Coin>(from)->getMethods()->functionExists(node->getLastChild()->getValue()))
 	{
 		std::cout << colorText(31) << "\nUnknown member" << node->getLastChild()->getToken().str() << colorText();
@@ -1522,7 +1536,18 @@ std::string Node::getOpType()
 {
 	if (this->getType() == TokenType::IDENTIFIER)
 	{
-		if (varExists(this->getValue()))
+		if (this->getValue() == "this")
+		{
+			if (last_THIS.top() == nullptr)
+			{
+				std::cout << colorText(31) << "ERR: 'this' must be inside member function. " << this->token.str() << colorText() << "\n";
+				breakCode();
+				return "";
+			}
+			else
+				return last_THIS.top()->getType();
+		}
+		else if (varExists(this->getValue()))
 			return getCoin(this->getValue())->getType();
 		else
 			return "";
@@ -1538,7 +1563,7 @@ std::string Node::getOpType()
 		default:					return "";
 		}
 	}
-	else if (this->getValue() == ".")
+	else if (this->getValue() == "." || this->getValue() == "->")
 	{
 		auto buf = checkTypes(this->getFirstChild()->getParent(), true);
 
@@ -1756,7 +1781,7 @@ bool Node::areNumerics(std::string a, std::string b)
 std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwError, std::string expectedType)
 {
 	if (node->getValue() == "(")
-	{
+	{	
 		return checkTypes(node->getFirstChild(), throwError, "function");
 	}
 	else if (node->getValue() == "*" && node->token.type == TokensEnum::OP_UNAR_PREF)
@@ -1767,6 +1792,12 @@ std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwErr
 
 		if (obj->getCoinType() == CoinType::POINTER)
 			return std::dynamic_pointer_cast<Pointer, Coin>(obj)->get();
+		else
+		{
+			std::cout << colorText(31) << "ERR: variable isn't pointer at " << node->getPosition() << colorText() << "\n";
+			breakCode();
+			return {};
+		}
 	}
 	else if (node->getValue() == "&" && node->token.type == TokensEnum::OP_UNAR_PREF)
 	{
@@ -1794,11 +1825,149 @@ std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwErr
 			return nullptr;
 
 		std::shared_ptr<Node> previousObj;
-		if (node->getFirstChild()->getValue() == ".")
+		if (node->getFirstChild()->getValue() == "." ||
+			node->getFirstChild()->getValue() == "->")
 			previousObj = node->getFirstChild()->getLastChild();
 		else if (node->getFirstChild()->getValue() == "(")
 		{
-			if (node->getFirstChild()->getFirstChild()->getValue() == ".")
+			if (node->getFirstChild()->getFirstChild()->getValue() == "." ||
+				node->getFirstChild()->getFirstChild()->getValue() == "->")
+				previousObj = node->getFirstChild()->getFirstChild()->getLastChild();
+			else
+				previousObj = node->getFirstChild()->getFirstChild();
+		}
+		else
+			previousObj = node->getFirstChild();
+
+		if (obj->getCoinType() != CoinType::OBJECT)
+		{
+			if (throwError)
+				std::cout << colorText(31) << "\nVariable:" << previousObj->getToken().str() + " - isn't an Object!" << colorText();
+			return nullptr;
+		}
+
+		// --- //
+
+		std::shared_ptr<Object> object = std::dynamic_pointer_cast<Object, Coin>(obj);
+
+		if (expectedType == "var")
+		{
+			if (object->getDelayedClass() != "")
+			{
+				if (classes.getClass(object->getDelayedClass())->getFields()->coinExists(node->getLastChild()->getValue()))
+				{
+					return classes.getClass(object->getDelayedClass())->getFields()->getCoin(node->getLastChild()->getValue());
+				}
+				else
+				{
+					if (throwError)
+						std::cout << colorText(31) << "\nUnknown field: "
+						<< node->getLastChild()->getToken().str() << " - of '" << node->getLastChild()->getValue() << "'" << colorText();
+					return nullptr;
+				}
+			}
+			else if (object->getFields()->coinExists(node->getLastChild()->getValue()))
+			{
+				return object->getFields()->getCoin(node->getLastChild()->getValue());
+			}
+			else
+			{
+				if (throwError)
+					std::cout << colorText(31) << "\nUnknown field: "
+					<< node->getLastChild()->getToken().str() << " - of '" << node->getLastChild()->getValue() << "'" << colorText();
+				return nullptr;
+			}
+		}
+		else if (expectedType == "function")
+		{
+			if (object->getDelayedClass() != "")
+			{
+				if (classes.getClass(object->getDelayedClass())->getMethods()->functionExists(node->getLastChild()->getValue()))
+				{
+					return classes.getClass(object->getDelayedClass())->getMethods()->getFunction(node->getLastChild()->getValue())->getReturnValue();
+				}
+				else
+				{
+					if (throwError)
+						std::cout << colorText(31) << "\nUnknown field: "
+						<< node->getLastChild()->getToken().str() << " - of '" << node->getLastChild()->getValue() << "'" << colorText();
+					return nullptr;
+				}
+			}
+			else if (object->getMethods()->functionExists(node->getLastChild()->getValue()))
+				return object->getMethods()->getFunction(node->getLastChild()->getValue())->getReturnValue();
+			else
+			{
+				if (throwError)
+					std::cout << colorText(31) << "\nUnknown method: "
+					<< node->getLastChild()->getToken().str() << " - of '" << previousObj->getValue() << "'" << colorText();
+				return nullptr;
+			}
+		}
+		else if (object->getDelayedClass() != "")
+		{
+			if (classes.getClass(object->getDelayedClass())->getFields()->coinExists(node->getLastChild()->getValue()))
+			{
+				return classes.getClass(object->getDelayedClass())->getFields()->getCoin(node->getLastChild()->getValue());
+			}
+			else if (classes.getClass(object->getDelayedClass())->getMethods()->functionExists(node->getLastChild()->getValue()))
+			{
+				return classes.getClass(object->getDelayedClass())->getMethods()->getFunction(node->getLastChild()->getValue())->getReturnValue();
+			}
+			else
+			{
+				if (throwError)
+					std::cout << colorText(31) << "\nUnknown member '" << node->getLastChild()->getToken().str() << "'" << colorText();
+				return nullptr;
+			}
+		}
+		else
+		{
+			if (object->getFields()->coinExists(node->getLastChild()->getValue()))
+			{
+				return object->getFields()->getCoin(node->getLastChild()->getValue());
+			}
+			else if (object->getMethods()->functionExists(node->getLastChild()->getValue()))
+			{
+				std::shared_ptr<Function> func = object->getMethods()->getFunction(node->getLastChild()->getValue());
+				auto coin(func->getReturnValue());
+				return coin;
+			}
+			else
+			{
+				if (throwError)
+					std::cout << colorText(31) << "\nUnknown member '" << node->getLastChild()->getToken().str() << "'" << colorText();
+				return nullptr;
+			}
+		}
+	}
+	else if (node->getValue() == "->")
+	{
+		std::shared_ptr<Coin> obj;
+		std::shared_ptr<Coin> obj2 = checkTypes(node->getFirstChild(), throwError);
+		if (obj2 == nullptr)
+			return nullptr;
+
+		if (obj2->getCoinType() == CoinType::POINTER)
+			obj = std::dynamic_pointer_cast<Pointer, Coin>(obj2)->get();
+		else
+		{
+			std::cout << colorText(31) << "ERR: variable isn't pointer at " << node->getPosition() << colorText() << "\n";
+			breakCode();
+			return nullptr;
+		}
+
+		if (obj == nullptr)
+			return nullptr;
+
+		std::shared_ptr<Node> previousObj;
+		if (node->getFirstChild()->getValue() == "." || 
+			node->getFirstChild()->getValue() == "->")
+			previousObj = node->getFirstChild()->getLastChild();
+		else if (node->getFirstChild()->getValue() == "(")
+		{
+			if (node->getFirstChild()->getFirstChild()->getValue() == "." || 
+				node->getFirstChild()->getFirstChild()->getValue() == "->")
 				previousObj = node->getFirstChild()->getFirstChild()->getLastChild();
 			else
 				previousObj = node->getFirstChild()->getFirstChild();
@@ -1928,7 +2097,18 @@ std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwErr
 	
 	if (expectedType == "var")
 	{
-		if (varExists(node->getValue()))
+		if (this->getValue() == "this")
+		{
+			if (last_THIS.top() == nullptr)
+			{
+				std::cout << colorText(31) << "ERR: 'this' must be inside member function. " << this->token.str() << colorText() << "\n";
+				breakCode();
+				return {};
+			}
+			else
+				return last_THIS.top();
+		}
+		else if (varExists(node->getValue()))
 			return getCoin(node->getValue());
 		else
 		{
@@ -1950,7 +2130,18 @@ std::shared_ptr<Coin> Node::checkTypes(std::shared_ptr<Node> node, bool throwErr
 	}
 	else
 	{
-		if (varExists(node->getValue()))
+		if (this->getValue() == "this")
+		{
+			if (last_THIS.top() == nullptr)
+			{
+				std::cout << colorText(31) << "ERR: 'this' must be inside member function. " << this->token.str() << colorText() << "\n";
+				breakCode();
+				return {};
+			}
+			else
+				return last_THIS.top();
+		}
+		else if (varExists(node->getValue()))
 			return getCoin(node->getValue());
 		else if (functions.getTable().contains(node->getValue()))
 			return getCoin(node->getValue());
