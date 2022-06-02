@@ -632,7 +632,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 	}
 	else if (this->getValue() == "return")
 	{
-		if (functionDeclaration.top() == "")
+		if (functionDeclaration.empty() || functionDeclaration.top() == "")
 		{
 			std::cout << colorText(31) << "ERR: 'return' must be inside function. " << this->token.str() << colorText() << "\n";
 			breakCode();
@@ -866,13 +866,13 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 
 		++it;
 
-		if (classDeclaration.top() == "" && functions.functionExists(functionName))
+		if ((classDeclaration.empty() || classDeclaration.top() == "") && functions.functionExists(functionName))
 		{
 			std::cout << colorText(31) << "ERR: function name duplication. " << this->getFirstChild()->getFirstChild()->token.str() << colorText() << "\n";
 			breakCode();
 			return {};
 		}
-		else if (classDeclaration.top() != "" && classes.getClass(classDeclaration.top())->getMethods()->functionExists(functionName))
+		else if (!classDeclaration.empty() && classDeclaration.top() != "" && classes.getClass(classDeclaration.top())->getMethods()->functionExists(functionName))
 		{
 			std::cout << colorText(31) << "ERR: method name duplication. " << this->getFirstChild()->getFirstChild()->token.str() << colorText() << "\n";
 			breakCode();
@@ -921,7 +921,7 @@ nodeVect Node::RPN(std::shared_ptr<Node> me, size_t current_size, bool clean)
 				++it2;
 		}
 
-		if (classDeclaration.top() != "")
+		if (!classDeclaration.empty() && classDeclaration.top() != "")
 			classes.getClass(classDeclaration.top())->getMethods()->putFunction(
 				functionName, std::make_shared<CoinTable>(attributes), order, orderNames,
 				std::make_shared<RPNVect>(attributesRPN), getCoin(functionName), std::make_shared<RPNVect>(bodyRPN));
@@ -1446,14 +1446,14 @@ std::vector<std::shared_ptr<Coin>> Node::allocate(size_t amount)
 				Temp_Name, classes.getClass((*it)->concatTypes()), std::make_shared<CoinTable>(newFields));
 			output.push_back(getCoin(Temp_Name));
 		}
-		else if ((*it)->getValue() == classDeclaration.top())
+		else if (!classDeclaration.empty() && (*it)->getValue() == classDeclaration.top())
 		{
 			//std::cout << "WARN: not full class type\n";
 			
 			variables[1]->putDelayedObjectCoin(Temp_Name, classDeclaration.top());
 			output.push_back(getCoin(Temp_Name));
 		}
-		else if ((*it)->concatTypes() == classDeclaration.top())
+		else if (!classDeclaration.empty() && (*it)->concatTypes() == classDeclaration.top())
 		{
 			//std::cout << "WARN: not full class type\n";
 			
